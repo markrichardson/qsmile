@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from chebfun import Chebfun
+from chebpy import chebfun
 
 
 def greet(name: str) -> str:
@@ -12,4 +12,4 @@ def greet(name: str) -> str:
 
 def approximate(func, domain=(-1, 1)):
     """Approximate a function using Chebyshev polynomials."""
-    return Chebfun.from_function(func, domain=domain)
+    return chebfun(func, domain=list(domain))

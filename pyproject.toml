@@ -1,7 +1,7 @@
 [project]
 name = "qsmile"
 version = "0.8.16"
-description = "Quantitative Smile"
+description = "Volatility Smile Modelling"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
