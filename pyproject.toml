@@ -41,6 +41,7 @@ Repository = "https://github.com/markrichardson/qsmile"
 Issues = "https://github.com/markrichardson/qsmile/issues"
 
 [tool.deptry.package_module_name_map]
+chebfun = "chebpy"
 marimo = "marimo"
 numpy = "numpy"
 plotly = "plotly"
