@@ -984,7 +984,7 @@ wheels = [
 
 [[package]]
 name = "qsmile"
-version = "0.0.1"
+version = "0.0.1rc1"
 source = { editable = "." }
 dependencies = [
     { name = "chebfun" },
