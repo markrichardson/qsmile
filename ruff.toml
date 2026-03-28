@@ -107,6 +107,9 @@ line-ending = "auto"
     "S603",     # Allow subprocess calls without shell=False check
     "S607",     # Allow starting processes with partial paths in tests
     "PLW1510",  # Allow subprocess without explicit check parameter
+    "D101",     # Allow missing docstrings on test classes
+    "D102",     # Allow missing docstrings on test methods
+    "D105",     # Allow missing docstrings on magic methods in tests
 ]
 "tests/**/*.py" = [
     "ERA001",   # Allow commented out code in project tests

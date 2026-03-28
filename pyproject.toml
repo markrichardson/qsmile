@@ -21,7 +21,8 @@ classifiers = [
     "Topic :: Software Development :: Build Tools",
 ]
 dependencies = [
-    "chebfun>=0.0.0,<1.0",   # Chebfun for numerical computing (v0.x for stability, 1.0+ may have breaking changes)
+    "numpy>=2.4.0,<3.0",     # Numerical arrays for market data and SVI evaluation
+    "scipy>=1.14.0,<2.0",    # Optimisation (least_squares) for SVI fitting
 ]
 
 [dependency-groups]
@@ -40,9 +41,9 @@ Repository = "https://github.com/markrichardson/qsmile"
 Issues = "https://github.com/markrichardson/qsmile/issues"
 
 [tool.deptry.package_module_name_map]
-chebfun = "chebpy"
 marimo = "marimo"
 numpy = "numpy"
+scipy = "scipy"
 plotly = "plotly"
 pandas = "pandas"
 pyyaml = "yaml"
