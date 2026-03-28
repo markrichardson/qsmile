@@ -4,6 +4,7 @@ host: github
 ref: v0.8.16
 include: []
 exclude:
+- .github/workflows/rhiza_link_check.yml
 - book/marimo/notebooks/rhiza.py
 templates:
 - devcontainer
@@ -126,5 +127,5 @@ files:
 - docs/TESTS.md
 - pytest.ini
 - ruff.toml
-synced_at: '2026-03-27T22:05:18Z'
+synced_at: '2026-03-28T15:41:26Z'
 strategy: merge
