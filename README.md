@@ -57,7 +57,7 @@ make install
 
 ## Quick Start
 
-```python
+```python +RHIZA_SKIP
 import numpy as np
 from qsmile import OptionChain, fit_svi
 
