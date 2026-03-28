@@ -27,22 +27,29 @@
 
 ## Overview
 
-**qsmile** is a Python library for fitting parametric volatility smile models to option chain data. It provides validated data containers, model evaluation, and least-squares calibration out of the box.
+**qsmile** is a Python library for fitting parametric volatility smile models to option chain data. It provides bid/ask-aware data containers, Black76 pricing, forward/discount-factor calibration, and least-squares SVI calibration out of the box.
 
-The current implementation supports the **SVI** (Stochastic Volatility Inspired) raw parameterisation:
+### Key capabilities
+
+- **Bid/ask option prices** — `OptionChainPrices` stores bid/ask call and put prices, and automatically calibrates the forward and discount factor from put-call parity using quasi-delta weighted least squares.
+- **Implied volatility conversion** — Convert prices to bid/ask implied vols (`OptionChainVols`) via Black76 inversion, and back again.
+- **Unitised (normalised) space** — `UnitisedSpaceVols` maps to coordinates $\tilde{k} = \ln(K/F) / (\sigma_{\text{ATM}} \sqrt{T})$ and total variance $v = \sigma^2 T$, enabling cross-expiry comparison.
+- **SVI fitting** — Fit the SVI raw parameterisation to any chain representation:
 
 $$w(k) = a + b\left(\rho(k - m) + \sqrt{(k - m)^2 + \sigma^2}\right)$$
 
 where $k = \ln(K/F)$ is log-moneyness and $w$ is total implied variance.
 
-> **Note**: The API is under active development and will change significantly in upcoming releases.
+- **Black76 pricing** — Vectorised call/put pricing and implied vol inversion via `black76_call`, `black76_put`, and `black76_implied_vol`.
+- **Plotting** — All chain types have a `.plot()` method for bid/ask error-bar charts (requires `qsmile[plot]`).
 
 ---
 
 ## Installation
 
 ```bash
-pip install qsmile
+pip install qsmile            # core
+pip install "qsmile[plot]"    # with matplotlib plotting
 ```
 
 For development:
@@ -57,11 +64,42 @@ make install
 
 ## Quick Start
 
+### From bid/ask prices (full pipeline)
+
+```python +RHIZA_SKIP
+import numpy as np
+from qsmile import OptionChainPrices, fit_svi
+
+# Bid/ask prices — forward and DF are calibrated automatically
+prices = OptionChainPrices(
+    strikes=np.array([80, 90, 95, 100, 105, 110, 120], dtype=float),
+    call_bid=np.array([20.5, 11.8, 7.5, 4.2, 2.0, 0.8, 0.1]),
+    call_ask=np.array([21.5, 12.4, 8.0, 4.6, 2.3, 1.0, 0.2]),
+    put_bid=np.array([0.1, 0.6, 1.5, 3.1, 5.8, 9.6, 18.8]),
+    put_ask=np.array([0.2, 0.8, 1.8, 3.5, 6.2, 10.2, 19.6]),
+    expiry=0.5,
+)
+print(prices.forward)          # Calibrated forward
+print(prices.discount_factor)  # Calibrated discount factor
+
+# Convert to implied vols
+vols = prices.to_vols()
+
+# Convert to unitised (normalised) space
+unitised = vols.to_unitised()
+
+# Fit SVI directly from vols
+result = fit_svi(vols)
+print(result.params)   # Fitted SVIParams
+print(result.rmse)     # Root mean square error
+```
+
+### From mid implied vols
+
 ```python +RHIZA_SKIP
 import numpy as np
 from qsmile import OptionChain, fit_svi
 
-# Market data
 chain = OptionChain(
     strikes=np.array([80, 90, 100, 110, 120], dtype=float),
     ivs=np.array([0.28, 0.22, 0.18, 0.17, 0.19]),
@@ -69,11 +107,50 @@ chain = OptionChain(
     expiry=0.5,
 )
 
-# Fit SVI
 result = fit_svi(chain)
 print(result.params)   # Fitted SVIParams
 print(result.rmse)     # Root mean square error
 ```
+
+---
+
+## API Reference
+
+### Data containers
+
+| Class | Description |
+|---|---|
+| `OptionChainPrices` | Bid/ask call and put prices with automatic forward/DF calibration |
+| `OptionChainVols` | Bid/ask implied volatilities with conversions to prices, unitised space, and `OptionChain` |
+| `UnitisedSpaceVols` | Normalised coordinates for cross-expiry comparison |
+| `OptionChain` | Simple mid-vol chain (strikes, ivs, forward, expiry) |
+
+### Conversion pipeline
+
+```
+OptionChainPrices ─── .to_vols() ──→ OptionChainVols ─── .to_unitised() ──→ UnitisedSpaceVols
+                                      │                                        │
+                                      ├── .to_prices() ←──────────────────────┘ .to_vols()
+                                      └── .to_option_chain() ──→ OptionChain
+```
+
+### SVI fitting
+
+| Function / Class | Description |
+|---|---|
+| `fit_svi(chain)` | Fit SVI params — accepts `OptionChain` or `OptionChainVols` |
+| `SmileResult` | Fitted result with `.params`, `.rmse`, `.fitted_vols` |
+| `SVIParams` | SVI parameters `(a, b, rho, m, sigma)` |
+| `svi_total_variance(k, params)` | Evaluate SVI total variance at log-moneyness `k` |
+| `svi_implied_vol(k, params, expiry)` | Evaluate SVI implied vol at log-moneyness `k` |
+
+### Black76 pricing
+
+| Function | Description |
+|---|---|
+| `black76_call(F, K, D, σ, T)` | Vectorised Black76 call price |
+| `black76_put(F, K, D, σ, T)` | Vectorised Black76 put price |
+| `black76_implied_vol(price, F, K, D, T)` | Implied vol inversion via Brent's method |
 
 ---
 
