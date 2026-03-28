@@ -110,6 +110,7 @@ line-ending = "auto"
     "D101",     # Allow missing docstrings on test classes
     "D102",     # Allow missing docstrings on test methods
     "D105",     # Allow missing docstrings on magic methods in tests
+    "N806",     # Allow uppercase variable names (F, K, D, T — quant finance convention)
 ]
 "tests/**/*.py" = [
     "ERA001",   # Allow commented out code in project tests
@@ -121,6 +122,7 @@ line-ending = "auto"
 "**/marimo/**/*.py" = [
     "D100",    # No module docstring - marimo requires `import marimo` as the first statement
     "N803",    # Allow non-lowercase variable names in notebooks
+    "N806",    # Allow uppercase variable names in notebooks
     "S101",    # Allow assert statements in notebooks
     "PLC0415", # Allow imports not at top-level in notebooks
     "B018",    # Allow useless expressions in notebooks
@@ -131,4 +133,8 @@ line-ending = "auto"
 ".rhiza/utils/*.py" = [
     "PLW2901",  # Allow loop variable overwriting in utility scripts
     "TRY003",   # Allow long exception messages in utility scripts
+]
+# Quantitative finance source — standard mathematical notation (F=forward, K=strike, D=discount, T=time)
+"src/qsmile/**/*.py" = [
+    "N806",     # Allow uppercase variable names (quant finance convention)
 ]

@@ -343,12 +343,22 @@ def cell_23():
         r"""
         ## Summary
 
-        This notebook demonstrated the core **qsmile** workflow:
+        This notebook demonstrated the core **qsmile** SVI fitting workflow:
 
         - **`OptionChain`** — validated container for strikes, IVs, forward, and expiry
         - **`fit_svi`** — least-squares calibration of the SVI raw parameterisation
         - **`SmileResult`** — fitted parameters, residuals, RMSE, and `evaluate(k)`
         - **`svi_total_variance` / `svi_implied_vol`** — direct model evaluation
+
+        ### Full Option Chain Pipeline
+
+        For a complete bid/ask workflow starting from raw option prices, see the
+        **Chain Demo** notebook which walks through:
+
+        1. `OptionChainPrices` — bid/ask prices with auto-calibrated forward & discount factor
+        2. `OptionChainVols` — bid/ask implied vols via Black76 inversion
+        3. `UnitisedSpaceVols` — normalised coordinates for cross-expiry comparison
+        4. `fit_svi(vols)` — SVI fit directly from an `OptionChainVols`
 
         **Next steps** — future versions will add SVI-JW parameterisation,
         multi-expiry surface fitting, and arbitrage-free enforcement.

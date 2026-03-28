@@ -23,6 +23,12 @@ classifiers = [
 dependencies = [
     "numpy>=2.4.0,<3.0",     # Numerical arrays for market data and SVI evaluation
     "scipy>=1.14.0,<2.0",    # Optimisation (least_squares) for SVI fitting
+    "cvxpy>=1.6.0,<2.0",     # Convex optimisation for forward/DF calibration
+]
+
+[project.optional-dependencies]
+plot = [
+    "matplotlib>=3.9.0,<4.0",  # Plotting with bid/ask error bars
 ]
 
 [dependency-groups]
@@ -44,9 +50,11 @@ Issues = "https://github.com/markrichardson/qsmile/issues"
 marimo = "marimo"
 numpy = "numpy"
 scipy = "scipy"
+cvxpy = "cvxpy"
 plotly = "plotly"
 pandas = "pandas"
 pyyaml = "yaml"
+matplotlib = "matplotlib"
 
 [tool.ty.environment]
 python-version = "3.13"

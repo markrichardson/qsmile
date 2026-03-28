@@ -7,6 +7,7 @@ import numpy as np
 from qsmile.chain import OptionChain
 from qsmile.fitting import SmileResult, fit_svi
 from qsmile.svi import SVIParams, svi_implied_vol, svi_total_variance
+from qsmile.vols import OptionChainVols
 
 
 class TestFitSVISyntheticRoundTrip:
@@ -116,3 +117,35 @@ class TestSmileResult:
         assert result.params.b >= 0
         assert -1 < result.params.rho < 1
         assert result.params.sigma > 0
+
+
+class TestFitSVIFromOptionChainVols:
+    """fit_svi should accept OptionChainVols and produce the same result."""
+
+    def test_option_chain_vols_round_trip(self):
+        true_params = SVIParams(a=0.04, b=0.1, rho=-0.3, m=0.0, sigma=0.2)
+        expiry = 0.5
+        strikes = np.linspace(80, 120, 20)
+        forward = 100.0
+        k = np.log(strikes / forward)
+        ivs = svi_implied_vol(k, true_params, expiry)
+
+        # Fit via OptionChain
+        chain = OptionChain(strikes=strikes, ivs=ivs, forward=forward, expiry=expiry)
+        result_chain = fit_svi(chain)
+
+        # Fit via OptionChainVols (zero spread → mid == bid == ask)
+        vols = OptionChainVols(
+            strikes=strikes,
+            vol_bid=ivs,
+            vol_ask=ivs,
+            forward=forward,
+            discount_factor=1.0,
+            expiry=expiry,
+        )
+        result_vols = fit_svi(vols)
+
+        assert result_vols.success
+        np.testing.assert_allclose(result_vols.params.a, result_chain.params.a, atol=1e-8)
+        np.testing.assert_allclose(result_vols.params.b, result_chain.params.b, atol=1e-8)
+        np.testing.assert_allclose(result_vols.params.rho, result_chain.params.rho, atol=1e-8)
