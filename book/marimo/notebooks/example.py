@@ -6,7 +6,12 @@
 #     "plotly>=5.18.0",
 #     "pandas>=2.0.0",
 #     "scipy>=1.14.0",
+#     "qsmile",
 # ]
+#
+# [tool.uv.sources.qsmile]
+# path = "../../.."
+# editable = true
 # ///
 
 import marimo
