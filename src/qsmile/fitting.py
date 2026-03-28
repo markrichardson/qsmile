@@ -43,15 +43,22 @@ def _initial_guess(chain: OptionChain) -> NDArray[np.float64]:
     k = chain.log_moneyness
     w = chain.total_variance
 
-    # a: ATM total variance (interpolate or use closest to k=0)
+    # a: ATM total variance (closest to k=0)
     atm_idx = int(np.argmin(np.abs(k)))
     a0 = float(w[atm_idx])
 
-    # b*rho: slope estimate from linear regression of w on k
-    slope = float(np.polyfit(k, w, 1)[0]) if len(k) > 1 else 0.0
+    # Estimate slope and curvature from a quadratic fit: w ≈ c0 + c1*k + c2*k²
+    if len(k) >= 3:
+        coeffs = np.polyfit(k, w, 2)
+        c2, c1, _c0 = coeffs
+        # b controls wings (curvature), rho controls skew (slope)
+        # From SVI asymptotics: dw/dk|0 ≈ b*rho, d²w/dk²|0 ≈ b/sigma
+        b0 = max(abs(c1) + 2 * abs(c2), 0.01)
+        rho0 = np.clip(c1 / b0, -0.9, 0.9)
+    else:
+        b0 = max(float(np.std(w)) * 2, 0.01)
+        rho0 = 0.0
 
-    b0 = max(float(np.std(w)) * 2, 0.01)
-    rho0 = np.clip(slope / b0, -0.9, 0.9)
     m0 = float(k[atm_idx])
     sigma0 = max(float(np.std(k)) * 0.5, 0.01)
 
@@ -106,6 +113,7 @@ def fit_svi(chain: OptionChain, initial_params: SVIParams | None = None) -> Smil
         args=(k, w_obs),
         bounds=(lower, upper),
         method="trf",
+        max_nfev=10_000,
     )
 
     fitted_params = SVIParams(
