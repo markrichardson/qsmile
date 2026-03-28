@@ -72,6 +72,10 @@ def _calibrate_forward_df(
     prob = cp.Problem(objective, [df <= 1.0])
     prob.solve(solver=cp.CLARABEL)
 
+    if df.value is None or df_times_f.value is None:
+        msg = "put-call parity calibration failed to converge"
+        raise RuntimeError(msg)
+
     D_val = float(df.value)
     F_val = float(df_times_f.value) / D_val
 
