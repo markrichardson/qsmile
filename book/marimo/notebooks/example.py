@@ -25,7 +25,7 @@ with app.setup:
     import pandas as pd
     import plotly.graph_objects as go
 
-    from qsmile import OptionChain, SVIParams, fit_svi, svi_implied_vol
+    from qsmile import OptionChainVols, SVIParams, fit_svi, svi_implied_vol
 
 
 @app.cell(hide_code=True)
@@ -39,7 +39,7 @@ def cell_02():
         volatility smile models to option chain data.
 
         We'll walk through the core workflow:
-        1. Construct an `OptionChain` from market data
+        1. Construct an `OptionChainVols` from market data
         2. Fit the **SVI** (Stochastic Volatility Inspired) model
         3. Inspect fit quality and explore parameter sensitivity
 
@@ -78,7 +78,7 @@ def cell_05():
     # Generated from SVI(a=0.008, b=0.08, rho=-0.6, m=-0.02, sigma=0.10), rounded to 4dp
     ivs = np.array([0.2678, 0.2399, 0.2127, 0.1891, 0.1743, 0.1698, 0.1713, 0.1756, 0.1808])
 
-    chain = OptionChain(strikes=strikes, ivs=ivs, forward=forward, expiry=expiry)
+    chain = OptionChainVols.from_mid_vols(strikes=strikes, ivs=ivs, forward=forward, expiry=expiry)
     return chain, expiry, ivs, strikes
 
 
@@ -157,7 +157,7 @@ def cell_10(chain, expiry, result):
     fig.add_trace(
         go.Scatter(
             x=_k_market,
-            y=chain.ivs * 100,
+            y=chain.vol_mid * 100,
             mode="markers",
             marker={"size": 10, "color": "#E74C3C"},
             name="Market",
@@ -345,7 +345,7 @@ def cell_23():
 
         This notebook demonstrated the core **qsmile** SVI fitting workflow:
 
-        - **`OptionChain`** — validated container for strikes, IVs, forward, and expiry
+        - **`OptionChainVols`** — validated container for strikes, IVs, forward, and expiry
         - **`fit_svi`** — least-squares calibration of the SVI raw parameterisation
         - **`SmileResult`** — fitted parameters, residuals, RMSE, and `evaluate(k)`
         - **`svi_total_variance` / `svi_implied_vol`** — direct model evaluation

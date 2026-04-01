@@ -98,9 +98,9 @@ print(result.rmse)     # Root mean square error
 
 ```python +RHIZA_SKIP
 import numpy as np
-from qsmile import OptionChain, fit_svi
+from qsmile import OptionChainVols, fit_svi
 
-chain = OptionChain(
+chain = OptionChainVols.from_mid_vols(
     strikes=np.array([80, 90, 100, 110, 120], dtype=float),
     ivs=np.array([0.28, 0.22, 0.18, 0.17, 0.19]),
     forward=100.0,
@@ -121,24 +121,22 @@ print(result.rmse)     # Root mean square error
 | Class | Description |
 |---|---|
 | `OptionChainPrices` | Bid/ask call and put prices with automatic forward/DF calibration |
-| `OptionChainVols` | Bid/ask implied volatilities with conversions to prices, unitised space, and `OptionChain` |
+| `OptionChainVols` | Bid/ask implied volatilities with conversions to prices and unitised space |
 | `UnitisedSpaceVols` | Normalised coordinates for cross-expiry comparison |
-| `OptionChain` | Simple mid-vol chain (strikes, ivs, forward, expiry) |
 
 ### Conversion pipeline
 
 ```
 OptionChainPrices ─── .to_vols() ──→ OptionChainVols ─── .to_unitised() ──→ UnitisedSpaceVols
                                       │                                        │
-                                      ├── .to_prices() ←──────────────────────┘ .to_vols()
-                                      └── .to_option_chain() ──→ OptionChain
+                                      └── .to_prices() ←──────────────────────┘ .to_vols()
 ```
 
 ### SVI fitting
 
 | Function / Class | Description |
 |---|---|
-| `fit_svi(chain)` | Fit SVI params — accepts `OptionChain` or `OptionChainVols` |
+| `fit_svi(chain)` | Fit SVI params — accepts `OptionChainVols` |
 | `SmileResult` | Fitted result with `.params`, `.rmse`, `.fitted_vols` |
 | `SVIParams` | SVI parameters `(a, b, rho, m, sigma)` |
 | `svi_total_variance(k, params)` | Evaluate SVI total variance at log-moneyness `k` |

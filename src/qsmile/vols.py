@@ -13,7 +13,6 @@ from qsmile.unitised import UnitisedSpaceVols
 if TYPE_CHECKING:
     import matplotlib.figure
 
-    from qsmile.chain import OptionChain
     from qsmile.prices import OptionChainPrices
 
 
@@ -93,6 +92,11 @@ class OptionChainVols:
         return np.log(self.strikes / self.forward)
 
     @property
+    def total_variance(self) -> NDArray[np.float64]:
+        """Total implied variance w = vol_mid^2 * T for each observation."""
+        return self.vol_mid**2 * self.expiry
+
+    @property
     def sigma_atm(self) -> float:
         """Mid implied volatility at the strike closest to the forward."""
         atm_idx = int(np.argmin(np.abs(self.strikes - self.forward)))
@@ -138,15 +142,38 @@ class OptionChainVols:
             discount_factor=self.discount_factor,
         )
 
-    def to_option_chain(self) -> OptionChain:
-        """Convert to the existing OptionChain using mid vols."""
-        from qsmile.chain import OptionChain
+    @classmethod
+    def from_mid_vols(
+        cls,
+        strikes: NDArray[np.float64],
+        ivs: NDArray[np.float64],
+        forward: float,
+        expiry: float,
+        discount_factor: float = 1.0,
+    ) -> OptionChainVols:
+        """Create from mid implied vols (setting bid = ask = ivs).
 
-        return OptionChain(
-            strikes=self.strikes.copy(),
-            ivs=self.vol_mid,
-            forward=self.forward,
-            expiry=self.expiry,
+        Parameters
+        ----------
+        strikes : NDArray[np.float64]
+            Strike prices.
+        ivs : NDArray[np.float64]
+            Mid implied volatilities.
+        forward : float
+            Forward price.
+        expiry : float
+            Time to expiry in years.
+        discount_factor : float
+            Discount factor, defaults to 1.0.
+        """
+        ivs = np.asarray(ivs, dtype=np.float64)
+        return cls(
+            strikes=strikes,
+            vol_bid=ivs,
+            vol_ask=ivs.copy(),
+            forward=forward,
+            discount_factor=discount_factor,
+            expiry=expiry,
         )
 
     def plot(self, *, title: str = "Implied Volatilities") -> matplotlib.figure.Figure:

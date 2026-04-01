@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import numpy as np
 
-from qsmile.chain import OptionChain
 from qsmile.fitting import SmileResult, fit_svi
 from qsmile.svi import SVIParams, svi_implied_vol, svi_total_variance
 from qsmile.vols import OptionChainVols
@@ -21,7 +20,7 @@ class TestFitSVISyntheticRoundTrip:
         k = np.log(strikes / forward)
         ivs = svi_implied_vol(k, true_params, expiry)
 
-        chain = OptionChain(strikes=strikes, ivs=ivs, forward=forward, expiry=expiry)
+        chain = OptionChainVols.from_mid_vols(strikes=strikes, ivs=ivs, forward=forward, expiry=expiry)
         result = fit_svi(chain)
 
         assert result.success
@@ -48,7 +47,7 @@ class TestFitSVINoisyData:
         noise = rng.normal(0, 0.002, size=ivs_clean.shape)
         ivs_noisy = ivs_clean + noise
 
-        chain = OptionChain(strikes=strikes, ivs=ivs_noisy, forward=forward, expiry=expiry)
+        chain = OptionChainVols.from_mid_vols(strikes=strikes, ivs=ivs_noisy, forward=forward, expiry=expiry)
         result = fit_svi(chain)
 
         assert result.success
@@ -66,7 +65,7 @@ class TestFitSVICustomInitialGuess:
         k = np.log(strikes / forward)
         ivs = svi_implied_vol(k, true_params, expiry)
 
-        chain = OptionChain(strikes=strikes, ivs=ivs, forward=forward, expiry=expiry)
+        chain = OptionChainVols.from_mid_vols(strikes=strikes, ivs=ivs, forward=forward, expiry=expiry)
         guess = SVIParams(a=0.03, b=0.08, rho=-0.2, m=0.01, sigma=0.15)
         result = fit_svi(chain, initial_params=guess)
 
@@ -83,7 +82,7 @@ class TestSmileResult:
         k = np.log(strikes / forward)
         ivs = svi_implied_vol(k, true_params, expiry)
 
-        chain = OptionChain(strikes=strikes, ivs=ivs, forward=forward, expiry=expiry)
+        chain = OptionChainVols.from_mid_vols(strikes=strikes, ivs=ivs, forward=forward, expiry=expiry)
         result = fit_svi(chain)
 
         assert result.residuals.shape == (10,)
@@ -111,7 +110,7 @@ class TestSmileResult:
         k = np.log(strikes / forward)
         ivs = svi_implied_vol(k, true_params, expiry)
 
-        chain = OptionChain(strikes=strikes, ivs=ivs, forward=forward, expiry=expiry)
+        chain = OptionChainVols.from_mid_vols(strikes=strikes, ivs=ivs, forward=forward, expiry=expiry)
         result = fit_svi(chain)
 
         assert result.params.b >= 0
@@ -130,8 +129,8 @@ class TestFitSVIFromOptionChainVols:
         k = np.log(strikes / forward)
         ivs = svi_implied_vol(k, true_params, expiry)
 
-        # Fit via OptionChain
-        chain = OptionChain(strikes=strikes, ivs=ivs, forward=forward, expiry=expiry)
+        # Fit via OptionChainVols.from_mid_vols
+        chain = OptionChainVols.from_mid_vols(strikes=strikes, ivs=ivs, forward=forward, expiry=expiry)
         result_chain = fit_svi(chain)
 
         # Fit via OptionChainVols (zero spread → mid == bid == ask)

@@ -153,13 +153,6 @@ class TestOptionChainVolsConversions:
         np.testing.assert_allclose(u.variance_bid, vols.vol_bid**2 * vols.expiry)
         np.testing.assert_allclose(u.variance_ask, vols.vol_ask**2 * vols.expiry)
 
-    def test_to_option_chain(self):
-        vols = _make_vols()
-        chain = vols.to_option_chain()
-        np.testing.assert_allclose(chain.ivs, vols.vol_mid)
-        assert chain.forward == vols.forward
-        assert chain.expiry == vols.expiry
-
     def test_to_prices_round_trip(self):
         vols = _make_vols()
         prices = vols.to_prices()
