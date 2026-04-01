@@ -9,12 +9,10 @@ import cvxpy as cp
 import numpy as np
 from numpy.typing import NDArray
 
-from qsmile.black76 import black76_implied_vol
-
 if TYPE_CHECKING:
     import matplotlib.figure
 
-    from qsmile.vols import OptionChainVols
+    from qsmile.smile_data import SmileData
 
 
 def _calibrate_forward_df(
@@ -179,46 +177,29 @@ class OptionChainPrices:
         """Midpoint of put bid and ask prices."""
         return (self.put_bid + self.put_ask) / 2.0
 
-    def to_vols(self) -> OptionChainVols:
-        """Convert prices to implied volatilities via Black76 inversion."""
-        from qsmile.vols import OptionChainVols
+    def to_smile_data(self) -> SmileData:
+        """Convert to a SmileData with (FixedStrike, Price) coordinates.
+
+        Uses call mid-market prices as the Y-values.
+        """
+        from qsmile.coords import XCoord, YCoord
+        from qsmile.metadata import SmileMetadata
+        from qsmile.smile_data import SmileData
 
         assert self.forward is not None  # noqa: S101
         assert self.discount_factor is not None  # noqa: S101
 
-        n = len(self.strikes)
-        vol_bid = np.empty(n)
-        vol_ask = np.empty(n)
-
-        for i in range(n):
-            K = float(self.strikes[i])
-            # Use call for strikes >= forward, put otherwise (more numerically stable)
-            use_call = self.forward <= K
-
-            vol_bid[i] = black76_implied_vol(
-                float(self.call_bid[i] if use_call else self.put_bid[i]),
-                self.forward,
-                K,
-                self.discount_factor,
-                self.expiry,
-                is_call=use_call,
-            )
-            vol_ask[i] = black76_implied_vol(
-                float(self.call_ask[i] if use_call else self.put_ask[i]),
-                self.forward,
-                K,
-                self.discount_factor,
-                self.expiry,
-                is_call=use_call,
-            )
-
-        return OptionChainVols(
-            strikes=self.strikes.copy(),
-            vol_bid=vol_bid,
-            vol_ask=vol_ask,
-            forward=self.forward,
-            discount_factor=self.discount_factor,
-            expiry=self.expiry,
+        return SmileData(
+            x=self.strikes.copy(),
+            y_bid=self.call_bid.copy(),
+            y_ask=self.call_ask.copy(),
+            x_coord=XCoord.FixedStrike,
+            y_coord=YCoord.Price,
+            metadata=SmileMetadata(
+                forward=self.forward,
+                discount_factor=self.discount_factor,
+                expiry=self.expiry,
+            ),
         )
 
     def plot(self, *, title: str = "Option Chain Prices") -> matplotlib.figure.Figure:

@@ -4,10 +4,9 @@ from __future__ import annotations
 
 import numpy as np
 
-from qsmile.chain import OptionChain
 from qsmile.fitting import SmileResult, fit_svi
+from qsmile.smile_data import SmileData
 from qsmile.svi import SVIParams, svi_implied_vol, svi_total_variance
-from qsmile.vols import OptionChainVols
 
 
 class TestFitSVISyntheticRoundTrip:
@@ -21,8 +20,8 @@ class TestFitSVISyntheticRoundTrip:
         k = np.log(strikes / forward)
         ivs = svi_implied_vol(k, true_params, expiry)
 
-        chain = OptionChain(strikes=strikes, ivs=ivs, forward=forward, expiry=expiry)
-        result = fit_svi(chain)
+        sd = SmileData.from_mid_vols(strikes=strikes, ivs=ivs, forward=forward, expiry=expiry)
+        result = fit_svi(sd)
 
         assert result.success
         assert result.rmse < 1e-10
@@ -48,8 +47,8 @@ class TestFitSVINoisyData:
         noise = rng.normal(0, 0.002, size=ivs_clean.shape)
         ivs_noisy = ivs_clean + noise
 
-        chain = OptionChain(strikes=strikes, ivs=ivs_noisy, forward=forward, expiry=expiry)
-        result = fit_svi(chain)
+        sd = SmileData.from_mid_vols(strikes=strikes, ivs=ivs_noisy, forward=forward, expiry=expiry)
+        result = fit_svi(sd)
 
         assert result.success
         assert result.rmse < 0.01
@@ -66,9 +65,9 @@ class TestFitSVICustomInitialGuess:
         k = np.log(strikes / forward)
         ivs = svi_implied_vol(k, true_params, expiry)
 
-        chain = OptionChain(strikes=strikes, ivs=ivs, forward=forward, expiry=expiry)
+        sd = SmileData.from_mid_vols(strikes=strikes, ivs=ivs, forward=forward, expiry=expiry)
         guess = SVIParams(a=0.03, b=0.08, rho=-0.2, m=0.01, sigma=0.15)
-        result = fit_svi(chain, initial_params=guess)
+        result = fit_svi(sd, initial_params=guess)
 
         assert result.success
         assert result.rmse < 1e-6
@@ -83,8 +82,8 @@ class TestSmileResult:
         k = np.log(strikes / forward)
         ivs = svi_implied_vol(k, true_params, expiry)
 
-        chain = OptionChain(strikes=strikes, ivs=ivs, forward=forward, expiry=expiry)
-        result = fit_svi(chain)
+        sd = SmileData.from_mid_vols(strikes=strikes, ivs=ivs, forward=forward, expiry=expiry)
+        result = fit_svi(sd)
 
         assert result.residuals.shape == (10,)
         assert isinstance(result.rmse, float)
@@ -111,18 +110,18 @@ class TestSmileResult:
         k = np.log(strikes / forward)
         ivs = svi_implied_vol(k, true_params, expiry)
 
-        chain = OptionChain(strikes=strikes, ivs=ivs, forward=forward, expiry=expiry)
-        result = fit_svi(chain)
+        sd = SmileData.from_mid_vols(strikes=strikes, ivs=ivs, forward=forward, expiry=expiry)
+        result = fit_svi(sd)
 
         assert result.params.b >= 0
         assert -1 < result.params.rho < 1
         assert result.params.sigma > 0
 
 
-class TestFitSVIFromOptionChainVols:
-    """fit_svi should accept OptionChainVols and produce the same result."""
+class TestFitSVIFromSmileData:
+    """fit_svi should accept SmileData in various coordinate systems."""
 
-    def test_option_chain_vols_round_trip(self):
+    def test_smile_data_from_mid_vols(self):
         true_params = SVIParams(a=0.04, b=0.1, rho=-0.3, m=0.0, sigma=0.2)
         expiry = 0.5
         strikes = np.linspace(80, 120, 20)
@@ -130,22 +129,11 @@ class TestFitSVIFromOptionChainVols:
         k = np.log(strikes / forward)
         ivs = svi_implied_vol(k, true_params, expiry)
 
-        # Fit via OptionChain
-        chain = OptionChain(strikes=strikes, ivs=ivs, forward=forward, expiry=expiry)
-        result_chain = fit_svi(chain)
+        # Fit via SmileData.from_mid_vols
+        sd = SmileData.from_mid_vols(strikes=strikes, ivs=ivs, forward=forward, expiry=expiry)
+        result = fit_svi(sd)
 
-        # Fit via OptionChainVols (zero spread → mid == bid == ask)
-        vols = OptionChainVols(
-            strikes=strikes,
-            vol_bid=ivs,
-            vol_ask=ivs,
-            forward=forward,
-            discount_factor=1.0,
-            expiry=expiry,
-        )
-        result_vols = fit_svi(vols)
-
-        assert result_vols.success
-        np.testing.assert_allclose(result_vols.params.a, result_chain.params.a, atol=1e-8)
-        np.testing.assert_allclose(result_vols.params.b, result_chain.params.b, atol=1e-8)
-        np.testing.assert_allclose(result_vols.params.rho, result_chain.params.rho, atol=1e-8)
+        assert result.success
+        np.testing.assert_allclose(result.params.a, true_params.a, atol=1e-6)
+        np.testing.assert_allclose(result.params.b, true_params.b, atol=1e-6)
+        np.testing.assert_allclose(result.params.rho, true_params.rho, atol=1e-6)

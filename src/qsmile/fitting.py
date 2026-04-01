@@ -3,17 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 from scipy.optimize import least_squares
 
-from qsmile.chain import OptionChain
+from qsmile.coords import XCoord, YCoord
+from qsmile.smile_data import SmileData
 from qsmile.svi import SVIParams, svi_total_variance
-
-if TYPE_CHECKING:
-    from qsmile.vols import OptionChainVols
 
 
 @dataclass
@@ -42,11 +39,8 @@ class SmileResult:
         return svi_total_variance(k, self.params)
 
 
-def _initial_guess(chain: OptionChain) -> NDArray[np.float64]:
+def _initial_guess(k: NDArray[np.float64], w: NDArray[np.float64]) -> NDArray[np.float64]:
     """Compute a heuristic initial guess for SVI parameters from market data."""
-    k = chain.log_moneyness
-    w = chain.total_variance
-
     # a: ATM total variance (closest to k=0)
     atm_idx = int(np.argmin(np.abs(k)))
     a0 = float(w[atm_idx])
@@ -76,14 +70,14 @@ def _residuals(x: NDArray[np.float64], k: NDArray[np.float64], w_obs: NDArray[np
     return w_model - w_obs
 
 
-def fit_svi(chain: OptionChain | OptionChainVols, initial_params: SVIParams | None = None) -> SmileResult:
+def fit_svi(chain: SmileData, initial_params: SVIParams | None = None) -> SmileResult:
     """Fit SVI raw parameters to option chain data.
 
     Parameters
     ----------
-    chain : OptionChain | OptionChainVols
-        Market data to fit. If an ``OptionChainVols`` is passed it is
-        automatically converted to an ``OptionChain`` using mid vols.
+    chain : SmileData
+        Market data to fit. Uses mid values for fitting.
+        Internally transforms to (LogMoneynessStrike, TotalVariance).
     initial_params : SVIParams, optional
         Initial parameter guess. If None, a heuristic guess is computed.
 
@@ -92,12 +86,9 @@ def fit_svi(chain: OptionChain | OptionChainVols, initial_params: SVIParams | No
     SmileResult
         Fitted parameters, residuals, RMSE, and convergence status.
     """
-    from qsmile.vols import OptionChainVols
-
-    if isinstance(chain, OptionChainVols):
-        chain = chain.to_option_chain()
-    k = chain.log_moneyness
-    w_obs = chain.total_variance
+    sd = chain.transform(XCoord.LogMoneynessStrike, YCoord.TotalVariance)
+    k = sd.x
+    w_obs = sd.y_mid
 
     if initial_params is not None:
         x0 = np.array(
@@ -110,7 +101,7 @@ def fit_svi(chain: OptionChain | OptionChainVols, initial_params: SVIParams | No
             ]
         )
     else:
-        x0 = _initial_guess(chain)
+        x0 = _initial_guess(k, w_obs)
 
     # Box constraints: a unbounded, b >= 0, -1 < rho < 1, m unbounded, sigma > 0
     lower = [-np.inf, 0.0, -0.999, -np.inf, 1e-8]

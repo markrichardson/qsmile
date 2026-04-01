@@ -32,9 +32,8 @@
 ### Key capabilities
 
 - **Bid/ask option prices** — `OptionChainPrices` stores bid/ask call and put prices, and automatically calibrates the forward and discount factor from put-call parity using quasi-delta weighted least squares.
-- **Implied volatility conversion** — Convert prices to bid/ask implied vols (`OptionChainVols`) via Black76 inversion, and back again.
-- **Unitised (normalised) space** — `UnitisedSpaceVols` maps to coordinates $\tilde{k} = \ln(K/F) / (\sigma_{\text{ATM}} \sqrt{T})$ and total variance $v = \sigma^2 T$, enabling cross-expiry comparison.
-- **SVI fitting** — Fit the SVI raw parameterisation to any chain representation:
+- **Coordinate transforms** — `SmileData` is a unified container with `.transform(x, y)` to freely convert between any combination of X-coordinates (Strike, Moneyness, Log-Moneyness, Standardised) and Y-coordinates (Price, Volatility, Variance, Total Variance) via composable, invertible maps.
+- **SVI fitting** — Fit the SVI raw parameterisation to `SmileData`:
 
 $$w(k) = a + b\left(\rho(k - m) + \sqrt{(k - m)^2 + \sigma^2}\right)$$
 
@@ -68,7 +67,7 @@ make install
 
 ```python +RHIZA_SKIP
 import numpy as np
-from qsmile import OptionChainPrices, fit_svi
+from qsmile import OptionChainPrices, SmileData, XCoord, YCoord, fit_svi
 
 # Bid/ask prices — forward and DF are calibrated automatically
 prices = OptionChainPrices(
@@ -82,14 +81,13 @@ prices = OptionChainPrices(
 print(prices.forward)          # Calibrated forward
 print(prices.discount_factor)  # Calibrated discount factor
 
-# Convert to implied vols
-vols = prices.to_vols()
+# Enter the coordinate transform framework
+sd = prices.to_smile_data()                                      # (FixedStrike, Price)
+sd_vols = sd.transform(XCoord.FixedStrike, YCoord.Volatility)    # → implied vols
+sd_unit = sd_vols.transform(XCoord.StandardisedStrike, YCoord.TotalVariance)  # → unitised
 
-# Convert to unitised (normalised) space
-unitised = vols.to_unitised()
-
-# Fit SVI directly from vols
-result = fit_svi(vols)
+# Fit SVI directly from SmileData
+result = fit_svi(sd_vols)
 print(result.params)   # Fitted SVIParams
 print(result.rmse)     # Root mean square error
 ```
@@ -98,16 +96,16 @@ print(result.rmse)     # Root mean square error
 
 ```python +RHIZA_SKIP
 import numpy as np
-from qsmile import OptionChain, fit_svi
+from qsmile import SmileData, fit_svi
 
-chain = OptionChain(
+sd = SmileData.from_mid_vols(
     strikes=np.array([80, 90, 100, 110, 120], dtype=float),
     ivs=np.array([0.28, 0.22, 0.18, 0.17, 0.19]),
     forward=100.0,
     expiry=0.5,
 )
 
-result = fit_svi(chain)
+result = fit_svi(sd)
 print(result.params)   # Fitted SVIParams
 print(result.rmse)     # Root mean square error
 ```
@@ -121,24 +119,25 @@ print(result.rmse)     # Root mean square error
 | Class | Description |
 |---|---|
 | `OptionChainPrices` | Bid/ask call and put prices with automatic forward/DF calibration |
-| `OptionChainVols` | Bid/ask implied volatilities with conversions to prices, unitised space, and `OptionChain` |
-| `UnitisedSpaceVols` | Normalised coordinates for cross-expiry comparison |
-| `OptionChain` | Simple mid-vol chain (strikes, ivs, forward, expiry) |
+| `SmileData` | Unified coordinate-labelled container with `.transform(x, y)` and `.from_mid_vols()` factory |
 
-### Conversion pipeline
+### Coordinate transforms
 
 ```
-OptionChainPrices ─── .to_vols() ──→ OptionChainVols ─── .to_unitised() ──→ UnitisedSpaceVols
-                                      │                                        │
-                                      ├── .to_prices() ←──────────────────────┘ .to_vols()
-                                      └── .to_option_chain() ──→ OptionChain
+OptionChainPrices ─── .to_smile_data() ──→ SmileData ─── .transform(x, y) ──→ SmileData
+SmileData.from_mid_vols(...)            ──→ SmileData ───────────────────────────┘
 ```
+
+| Coordinate type | Values |
+|---|---|
+| X-coordinates | `FixedStrike`, `MoneynessStrike`, `LogMoneynessStrike`, `StandardisedStrike` |
+| Y-coordinates | `Price`, `Volatility`, `Variance`, `TotalVariance` |
 
 ### SVI fitting
 
 | Function / Class | Description |
 |---|---|
-| `fit_svi(chain)` | Fit SVI params — accepts `OptionChain` or `OptionChainVols` |
+| `fit_svi(chain)` | Fit SVI params from `SmileData` |
 | `SmileResult` | Fitted result with `.params`, `.rmse`, `.fitted_vols` |
 | `SVIParams` | SVI parameters `(a, b, rho, m, sigma)` |
 | `svi_total_variance(k, params)` | Evaluate SVI total variance at log-moneyness `k` |

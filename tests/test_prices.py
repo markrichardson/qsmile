@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 
 from qsmile.black76 import black76_call, black76_put
+from qsmile.coords import XCoord, YCoord
 from qsmile.prices import OptionChainPrices, _calibrate_forward_df
 
 
@@ -163,12 +164,13 @@ class TestMidPrices:
         np.testing.assert_allclose(chain.put_mid, expected)
 
 
-class TestToVols:
-    def test_price_to_vol_round_trip(self):
+class TestToSmileDataPriceToVol:
+    def test_price_to_vol_via_smile_data(self):
         data = _make_prices(vol=0.25, spread=0.01)
         chain = OptionChainPrices(**data)
-        vols = chain.to_vols()
+        sd = chain.to_smile_data()
+        sd_vols = sd.transform(XCoord.FixedStrike, YCoord.Volatility)
         # Mid vols should be close to 0.25
-        np.testing.assert_allclose(vols.vol_mid, 0.25, atol=0.002)
+        np.testing.assert_allclose(sd_vols.y_mid, 0.25, atol=0.002)
         # Spread should be preserved
-        assert np.all(vols.vol_ask >= vols.vol_bid)
+        assert np.all(sd_vols.y_ask >= sd_vols.y_bid)

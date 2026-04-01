@@ -1,4 +1,4 @@
-## ADDED Requirements
+## Requirements
 
 ### Requirement: OptionChainPrices provides a plot method
 The system SHALL provide a `.plot()` method on `OptionChainPrices` that renders a figure with bid and ask prices shown as error bars at each strike. Calls and puts SHALL be distinguishable (e.g., different colours or markers).
@@ -11,26 +11,19 @@ The system SHALL provide a `.plot()` method on `OptionChainPrices` that renders 
 - **WHEN** `.plot(title="My Plot")` is called
 - **THEN** the figure SHALL use the supplied title
 
-### Requirement: OptionChainVols provides a plot method
-The system SHALL provide a `.plot()` method on `OptionChainVols` that renders a figure with bid and ask implied volatilities shown as error bars at each strike.
+### Requirement: SmileData provides a plot method
+The system SHALL provide a `.plot()` method on `SmileData` that renders a figure with bid and ask Y-values shown as error bars at each X point. Axis labels SHALL be derived from the `x_coord` and `y_coord` names.
 
-#### Scenario: Plot vols
-- **WHEN** `.plot()` is called on a valid `OptionChainVols`
-- **THEN** the system SHALL return a `matplotlib.figure.Figure` with error bars spanning vol_bid to vol_ask
+#### Scenario: Plot SmileData in volatility coordinates
+- **WHEN** `.plot()` is called on a `SmileData` with `(FixedStrike, Volatility)` coordinates
+- **THEN** the system SHALL return a `matplotlib.figure.Figure` with X-axis labelled "FixedStrike" and Y-axis labelled "Volatility"
 
-#### Scenario: Plot with custom title
-- **WHEN** `.plot(title="My Plot")` is called
-- **THEN** the figure SHALL use the supplied title
-
-### Requirement: UnitisedSpaceVols provides a plot method
-The system SHALL provide a `.plot()` method on `UnitisedSpaceVols` that renders a figure with bid and ask total variances shown as error bars at each unitised log-moneyness point.
-
-#### Scenario: Plot unitised space
-- **WHEN** `.plot()` is called on a valid `UnitisedSpaceVols`
-- **THEN** the system SHALL return a `matplotlib.figure.Figure` with error bars spanning variance_bid to variance_ask, plotted against unitised log-moneyness
+#### Scenario: Plot SmileData in unitised coordinates
+- **WHEN** `.plot()` is called on a `SmileData` with `(StandardisedStrike, TotalVariance)` coordinates
+- **THEN** the system SHALL return a `matplotlib.figure.Figure` with appropriate axis labels
 
 #### Scenario: Plot with custom title
-- **WHEN** `.plot(title="My Plot")` is called
+- **WHEN** `.plot(title="My Plot")` is called on a `SmileData`
 - **THEN** the figure SHALL use the supplied title
 
 ### Requirement: Plot methods handle matplotlib import gracefully

@@ -25,7 +25,8 @@ with app.setup:
     import pandas as pd
     import plotly.graph_objects as go
 
-    from qsmile import OptionChain, SVIParams, fit_svi, svi_implied_vol
+    from qsmile import SmileData, SVIParams, fit_svi, svi_implied_vol
+    from qsmile.coords import XCoord, YCoord
 
 
 @app.cell(hide_code=True)
@@ -39,7 +40,7 @@ def cell_02():
         volatility smile models to option chain data.
 
         We'll walk through the core workflow:
-        1. Construct an `OptionChain` from market data
+        1. Construct a `SmileData` from mid implied volatilities
         2. Fit the **SVI** (Stochastic Volatility Inspired) model
         3. Inspect fit quality and explore parameter sensitivity
 
@@ -78,22 +79,23 @@ def cell_05():
     # Generated from SVI(a=0.008, b=0.08, rho=-0.6, m=-0.02, sigma=0.10), rounded to 4dp
     ivs = np.array([0.2678, 0.2399, 0.2127, 0.1891, 0.1743, 0.1698, 0.1713, 0.1756, 0.1808])
 
-    chain = OptionChain(strikes=strikes, ivs=ivs, forward=forward, expiry=expiry)
-    return chain, expiry, ivs, strikes
+    sd = SmileData.from_mid_vols(strikes=strikes, ivs=ivs, forward=forward, expiry=expiry)
+    return expiry, ivs, sd, strikes
 
 
 @app.cell(hide_code=True)
-def cell_06(chain, ivs, strikes):
+def cell_06(ivs, sd, strikes):
     """Display the option chain as an interactive table."""
+    _sd_lm = sd.transform(XCoord.LogMoneynessStrike, YCoord.TotalVariance)
     df = pd.DataFrame(
         {
             "Strike": strikes,
             "IV (%)": (ivs * 100).round(1),
-            "Log-Moneyness": chain.log_moneyness.round(4),
-            "Total Variance": chain.total_variance.round(6),
+            "Log-Moneyness": _sd_lm.x.round(4),
+            "Total Variance": _sd_lm.y_mid.round(6),
         }
     )
-    mo.vstack([mo.md("### Option Chain Data"), mo.ui.table(df)])
+    mo.vstack([mo.md("### Option Chain Data"), df])
     return
 
 
@@ -120,9 +122,9 @@ def cell_08():
 
 
 @app.cell(hide_code=True)
-def cell_09(chain):
-    """Fit SVI to the option chain and display results."""
-    result = fit_svi(chain)
+def cell_09(sd):
+    """Fit SVI to the SmileData and display results."""
+    result = fit_svi(sd)
     p = result.params
 
     mo.vstack(
@@ -147,9 +149,10 @@ def cell_09(chain):
 
 
 @app.cell(hide_code=True)
-def cell_10(chain, expiry, result):
+def cell_10(expiry, result, sd):
     """Plot market data vs fitted SVI smile."""
-    _k_market = chain.log_moneyness
+    _sd_lm = sd.transform(XCoord.LogMoneynessStrike, YCoord.Volatility)
+    _k_market = _sd_lm.x
     k_fine = np.linspace(_k_market.min() - 0.05, _k_market.max() + 0.05, 200)
     iv_fitted = svi_implied_vol(k_fine, result.params, expiry)
 
@@ -157,7 +160,7 @@ def cell_10(chain, expiry, result):
     fig.add_trace(
         go.Scatter(
             x=_k_market,
-            y=chain.ivs * 100,
+            y=_sd_lm.y_mid * 100,
             mode="markers",
             marker={"size": 10, "color": "#E74C3C"},
             name="Market",
@@ -185,9 +188,10 @@ def cell_10(chain, expiry, result):
 
 
 @app.cell(hide_code=True)
-def cell_11(chain, result):
+def cell_11(result, sd):
     """Plot fit residuals."""
-    _k_market = chain.log_moneyness
+    _sd_lm = sd.transform(XCoord.LogMoneynessStrike, YCoord.Volatility)
+    _k_market = _sd_lm.x
 
     fig_resid = go.Figure()
     fig_resid.add_trace(
@@ -300,16 +304,17 @@ def cell_17():
 
 
 @app.cell(hide_code=True)
-def cell_18(chain, k_fine, result):
+def cell_18(k_fine, result, sd):
     """Plot total variance: market vs SVI."""
-    w_market = chain.total_variance
-    w_fit = result.evaluate(k_fine)
+    _sd_lm = sd.transform(XCoord.LogMoneynessStrike, YCoord.TotalVariance)
+    _w_market = _sd_lm.y_mid
+    _w_fit = result.evaluate(k_fine)
 
     fig_w = go.Figure()
     fig_w.add_trace(
         go.Scatter(
-            x=chain.log_moneyness,
-            y=w_market,
+            x=_sd_lm.x,
+            y=_w_market,
             mode="markers",
             marker={"size": 10, "color": "#E74C3C"},
             name="Market",
@@ -318,7 +323,7 @@ def cell_18(chain, k_fine, result):
     fig_w.add_trace(
         go.Scatter(
             x=k_fine,
-            y=w_fit,
+            y=_w_fit,
             mode="lines",
             line={"color": "#2FA4A9", "width": 2.5},
             name="SVI Fit",
@@ -345,7 +350,7 @@ def cell_23():
 
         This notebook demonstrated the core **qsmile** SVI fitting workflow:
 
-        - **`OptionChain`** — validated container for strikes, IVs, forward, and expiry
+        - **`SmileData.from_mid_vols`** — construct a validated smile container from mid IVs
         - **`fit_svi`** — least-squares calibration of the SVI raw parameterisation
         - **`SmileResult`** — fitted parameters, residuals, RMSE, and `evaluate(k)`
         - **`svi_total_variance` / `svi_implied_vol`** — direct model evaluation
@@ -356,9 +361,10 @@ def cell_23():
         **Chain Demo** notebook which walks through:
 
         1. `OptionChainPrices` — bid/ask prices with auto-calibrated forward & discount factor
-        2. `OptionChainVols` — bid/ask implied vols via Black76 inversion
-        3. `UnitisedSpaceVols` — normalised coordinates for cross-expiry comparison
-        4. `fit_svi(vols)` — SVI fit directly from an `OptionChainVols`
+        2. `SmileData` — unified container with **coordinate transforms** between
+           any combination of X-coords (Strike, Moneyness, Log-Moneyness, Standardised)
+           and Y-coords (Price, Volatility, Variance, Total Variance)
+        3. `fit_svi(sd)` — SVI fit directly from a `SmileData`
 
         **Next steps** — future versions will add SVI-JW parameterisation,
         multi-expiry surface fitting, and arbitrage-free enforcement.
