@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import numpy as np
 from numpy.typing import NDArray
@@ -86,11 +86,18 @@ class SmileData:
         new_y_bid = apply_y_chain(self.y_bid, self.x, y_chain, self.metadata, self.x_coord, target_x)
         new_y_ask = apply_y_chain(self.y_ask, self.x, y_chain, self.metadata, self.x_coord, target_x)
 
+        # If we now have vols in FixedStrike and sigma_atm is missing, derive it
+        metadata = self.metadata
+        if target_y == YCoord.Volatility and target_x == XCoord.FixedStrike and metadata.sigma_atm is None:
+            atm_idx = int(np.argmin(np.abs(new_x - metadata.forward)))
+            sigma_atm = float((new_y_bid[atm_idx] + new_y_ask[atm_idx]) / 2.0)
+            metadata = replace(metadata, sigma_atm=sigma_atm)
+
         return SmileData(
             x=new_x,
             y_bid=new_y_bid,
             y_ask=new_y_ask,
             x_coord=target_x,
             y_coord=target_y,
-            metadata=self.metadata,
+            metadata=metadata,
         )

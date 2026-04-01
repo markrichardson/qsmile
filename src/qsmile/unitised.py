@@ -12,7 +12,6 @@ if TYPE_CHECKING:
     import matplotlib.figure
 
     from qsmile.smile_data import SmileData
-    from qsmile.vols import OptionChainVols
 
 
 @dataclass
@@ -73,38 +72,6 @@ class UnitisedSpaceVols:
     def variance_mid(self) -> NDArray[np.float64]:
         """Midpoint of bid and ask total variance."""
         return (self.variance_bid + self.variance_ask) / 2.0
-
-    def to_vols(
-        self,
-        forward: float,
-        strikes: NDArray[np.float64],
-        discount_factor: float = 1.0,
-    ) -> OptionChainVols:
-        """Convert back to OptionChainVols by inverting the normalisation.
-
-        Parameters
-        ----------
-        forward : float
-            Forward price.
-        strikes : NDArray[np.float64]
-            Strike prices (absolute, not unitised).
-        discount_factor : float
-            Discount factor.
-        """
-        from qsmile.vols import OptionChainVols
-
-        # Invert: v = sigma^2 * T → sigma = sqrt(v / T)
-        vol_bid = np.sqrt(self.variance_bid / self.expiry)
-        vol_ask = np.sqrt(self.variance_ask / self.expiry)
-
-        return OptionChainVols(
-            strikes=strikes,
-            vol_bid=vol_bid,
-            vol_ask=vol_ask,
-            forward=forward,
-            discount_factor=discount_factor,
-            expiry=self.expiry,
-        )
 
     def to_smile_data(self) -> SmileData:
         """Convert to a SmileData with (StandardisedStrike, TotalVariance) coordinates."""

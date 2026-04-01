@@ -5,6 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from qsmile.coords import XCoord, YCoord
 from qsmile.vols import OptionChainVols
 
 
@@ -143,24 +144,27 @@ class TestOptionChainVolsProperties:
 
 
 class TestOptionChainVolsConversions:
-    def test_to_unitised(self):
+    def test_to_unitised_via_smile_data(self):
         vols = _make_vols()
-        u = vols.to_unitised()
+        sd = vols.to_smile_data()
+        sd_u = sd.transform(XCoord.StandardisedStrike, YCoord.TotalVariance)
         # k_unitised = log(K/F) / (sigma_atm * sqrt(T))
         expected_k = vols.log_moneyness / (vols.sigma_atm * np.sqrt(vols.expiry))
-        np.testing.assert_allclose(u.k_unitised, expected_k)
+        np.testing.assert_allclose(sd_u.x, expected_k)
         # variance = vol^2 * T
-        np.testing.assert_allclose(u.variance_bid, vols.vol_bid**2 * vols.expiry)
-        np.testing.assert_allclose(u.variance_ask, vols.vol_ask**2 * vols.expiry)
+        np.testing.assert_allclose(sd_u.y_bid, vols.vol_bid**2 * vols.expiry)
+        np.testing.assert_allclose(sd_u.y_ask, vols.vol_ask**2 * vols.expiry)
 
-    def test_to_prices_round_trip(self):
+    def test_vol_price_round_trip_via_smile_data(self):
         vols = _make_vols()
-        prices = vols.to_prices()
-        vols2 = prices.to_vols()
-        np.testing.assert_allclose(vols2.vol_mid, vols.vol_mid, atol=1e-6)
+        sd = vols.to_smile_data()
+        sd_prices = sd.transform(XCoord.FixedStrike, YCoord.Price)
+        sd_vols2 = sd_prices.transform(XCoord.FixedStrike, YCoord.Volatility)
+        np.testing.assert_allclose(sd_vols2.y_mid, sd.y_mid, atol=1e-6)
 
-    def test_to_unitised_round_trip(self):
+    def test_unitised_round_trip_via_smile_data(self):
         vols = _make_vols()
-        u = vols.to_unitised()
-        vols2 = u.to_vols(forward=vols.forward, strikes=vols.strikes, discount_factor=vols.discount_factor)
-        np.testing.assert_allclose(vols2.vol_mid, vols.vol_mid, atol=1e-10)
+        sd = vols.to_smile_data()
+        sd_u = sd.transform(XCoord.StandardisedStrike, YCoord.TotalVariance)
+        sd_back = sd_u.transform(XCoord.FixedStrike, YCoord.Volatility)
+        np.testing.assert_allclose(sd_back.y_mid, sd.y_mid, atol=1e-10)

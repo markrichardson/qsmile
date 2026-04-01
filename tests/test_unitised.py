@@ -5,8 +5,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from qsmile.coords import XCoord, YCoord
 from qsmile.unitised import UnitisedSpaceVols
-from qsmile.vols import OptionChainVols
 
 
 def _make_unitised() -> UnitisedSpaceVols:
@@ -104,26 +104,14 @@ class TestUnitisedSpaceVolsProperties:
 
 
 class TestUnitisedSpaceVolsConversions:
-    def test_round_trip_via_vols(self):
-        """OptionChainVols → UnitisedSpaceVols → OptionChainVols preserves data."""
-        strikes = np.array([85.0, 90.0, 95.0, 100.0, 105.0, 110.0, 115.0])
-        vol_mid = np.array([0.28, 0.25, 0.22, 0.20, 0.21, 0.23, 0.26])
-        spread = 0.005
-        forward = 100.0
-        discount_factor = 0.98
-        expiry = 0.5
+    def test_round_trip_via_smile_data(self):
+        """UnitisedSpaceVols → SmileData → transform → back preserves data."""
+        u = _make_unitised()
+        sd = u.to_smile_data()
+        # Round-trip: StandardisedStrike/TotalVariance → LogMoneyness/Variance → back
+        sd_log = sd.transform(XCoord.LogMoneynessStrike, YCoord.Variance)
+        sd_back = sd_log.transform(XCoord.StandardisedStrike, YCoord.TotalVariance)
 
-        vols1 = OptionChainVols(
-            strikes=strikes,
-            vol_bid=vol_mid - spread,
-            vol_ask=vol_mid + spread,
-            forward=forward,
-            discount_factor=discount_factor,
-            expiry=expiry,
-        )
-
-        u = vols1.to_unitised()
-        vols2 = u.to_vols(forward=forward, strikes=strikes, discount_factor=discount_factor)
-
-        np.testing.assert_allclose(vols2.vol_bid, vols1.vol_bid, atol=1e-10)
-        np.testing.assert_allclose(vols2.vol_ask, vols1.vol_ask, atol=1e-10)
+        np.testing.assert_allclose(sd_back.y_bid, sd.y_bid, atol=1e-10)
+        np.testing.assert_allclose(sd_back.y_ask, sd.y_ask, atol=1e-10)
+        np.testing.assert_allclose(sd_back.x, sd.x, atol=1e-10)

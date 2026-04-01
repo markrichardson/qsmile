@@ -44,23 +44,20 @@ def cell_intro():
         r"""
         # Option Chain Pipeline — From Prices to Smile Fit
 
-        This notebook demonstrates the **qsmile** option chain pipeline, chaining
-        three representations of the same market data:
+        This notebook demonstrates the **qsmile** option chain pipeline:
 
         1. **`OptionChainPrices`** — raw bid/ask option prices, with forward & discount
            factor calibrated automatically from put-call parity
-        2. **`OptionChainVols`** — bid/ask implied volatilities obtained via Black76 inversion
-        3. **`UnitisedSpaceVols`** — normalised coordinates where log-moneyness is
-           scaled by $\sigma_{\mathrm{ATM}} \sqrt{T}$
-
-        Finally, we feed the vol chain into **`fit_svi`** to calibrate the SVI
-        parametric smile model.
+        2. **`SmileData`** — unified coordinate-labelled container with
+           `.transform(x, y)` to freely move between strike/moneyness/log-moneyness/standardised
+           X-coordinates and price/vol/variance/total-variance Y-coordinates
+        3. **`fit_svi`** — SVI parametric smile fit
 
         $$
-        \text{Prices} \xrightarrow{\texttt{to\_vols()}} \text{Vols}
-        \xrightarrow{\texttt{to\_unitised()}} \text{Unitised}
+        \text{Prices} \xrightarrow{\texttt{to\_smile\_data()}} \text{SmileData}
+        \xrightarrow{\texttt{transform()}} \text{any coords}
         \quad\big|\quad
-        \text{Vols} \xrightarrow{\texttt{fit\_svi()}} \text{SVI}
+        \text{SmileData} \xrightarrow{\texttt{fit\_svi()}} \text{SVI}
         $$
         """
     )
@@ -240,181 +237,15 @@ def cell_divider_1():
 
 
 @app.cell(hide_code=True)
-def cell_vols_intro():
-    """Introduce the vols stage."""
-    mo.md(
-        r"""
-        ## Stage 2 — `OptionChainVols`
-
-        Call `prices.to_vols()` to invert Black76 and obtain bid/ask implied
-        volatilities. This automatically selects calls for $K \geq F$ and
-        puts for $K < F$ for numerical stability.
-        """
-    )
-    return
-
-
-@app.cell
-def cell_vols(prices):
-    """Convert prices → implied vols."""
-    vols = prices.to_vols()
-    return (vols,)
-
-
-@app.cell(hide_code=True)
-def cell_vols_table(vols):
-    """Display vol chain as a table."""
-    df_vols = pd.DataFrame(
-        {
-            "Strike": vols.strikes,
-            "Vol Bid (%)": (vols.vol_bid * 100).round(2),
-            "Vol Mid (%)": (vols.vol_mid * 100).round(2),
-            "Vol Ask (%)": (vols.vol_ask * 100).round(2),
-            "log(K/F)": vols.log_moneyness.round(4),
-        }
-    )
-    mo.vstack(
-        [
-            mo.md("### Implied Volatility Chain"),
-            mo.md(f"**σ_ATM:** {vols.sigma_atm * 100:.2f}%"),
-            mo.ui.table(df_vols),
-        ]
-    )
-    return
-
-
-@app.cell(hide_code=True)
-def cell_vols_plot(vols):
-    """Plot bid/ask implied vols."""
-    _fig = go.Figure()
-    _fig.add_trace(
-        go.Scatter(
-            x=vols.strikes,
-            y=vols.vol_mid * 100,
-            mode="markers+lines",
-            error_y={
-                "type": "data",
-                "symmetric": False,
-                "array": ((vols.vol_ask - vols.vol_mid) * 100).tolist(),
-                "arrayminus": ((vols.vol_mid - vols.vol_bid) * 100).tolist(),
-            },
-            name="IV",
-            marker={"color": "#2FA4A9", "size": 8},
-            line={"color": "#2FA4A9"},
-        )
-    )
-    _fig.update_layout(
-        title="Stage 2: Bid/Ask Implied Volatilities",
-        xaxis_title="Strike",
-        yaxis_title="Implied Volatility (%)",
-        template="plotly_white",
-        height=420,
-    )
-    mo.ui.plotly(_fig)
-    return
-
-
-@app.cell(hide_code=True)
-def cell_divider_2():
-    """Section divider."""
-    mo.md(r"""---""")
-    return
-
-
-@app.cell(hide_code=True)
-def cell_unitised_intro():
-    """Introduce the unitised stage."""
-    mo.md(
-        r"""
-        ## Stage 3 — `UnitisedSpaceVols`
-
-        Call `vols.to_unitised()` to enter normalised coordinates:
-
-        $$\tilde{k} = \frac{\ln(K/F)}{\sigma_{\mathrm{ATM}} \sqrt{T}}
-        \qquad v = \sigma^2 T$$
-
-        In this space, different expiries become comparable and the SVI structure
-        is more clearly visible.
-        """
-    )
-    return
-
-
-@app.cell
-def cell_unitised(vols):
-    """Convert vols → unitised space."""
-    unitised = vols.to_unitised()
-    return (unitised,)
-
-
-@app.cell(hide_code=True)
-def cell_unitised_table(unitised):
-    """Display unitised data as a table."""
-    df_u = pd.DataFrame(
-        {
-            "k̃ (unitised)": unitised.k_unitised.round(4),
-            "Var Bid": unitised.variance_bid.round(6),
-            "Var Mid": unitised.variance_mid.round(6),
-            "Var Ask": unitised.variance_ask.round(6),
-        }
-    )
-    mo.vstack(
-        [
-            mo.md("### Unitised Space"),
-            mo.md(f"**σ_ATM:** {unitised.sigma_atm * 100:.2f}% &nbsp; **Expiry:** {unitised.expiry:.2f}y"),
-            mo.ui.table(df_u),
-        ]
-    )
-    return
-
-
-@app.cell(hide_code=True)
-def cell_unitised_plot(unitised):
-    """Plot unitised variance."""
-    _fig = go.Figure()
-    _fig.add_trace(
-        go.Scatter(
-            x=unitised.k_unitised,
-            y=unitised.variance_mid,
-            mode="markers+lines",
-            error_y={
-                "type": "data",
-                "symmetric": False,
-                "array": (unitised.variance_ask - unitised.variance_mid).tolist(),
-                "arrayminus": (unitised.variance_mid - unitised.variance_bid).tolist(),
-            },
-            name="Total Variance",
-            marker={"color": "#9B59B6", "size": 8},
-            line={"color": "#9B59B6"},
-        )
-    )
-    _fig.update_layout(
-        title="Stage 3: Unitised Total Variance",
-        xaxis_title="k̃ = ln(K/F) / (σ_ATM · √T)",
-        yaxis_title="v = σ² · T",
-        template="plotly_white",
-        height=420,
-    )
-    mo.ui.plotly(_fig)
-    return
-
-
-@app.cell(hide_code=True)
-def cell_divider_transforms():
-    """Section divider."""
-    mo.md(r"""---""")
-    return
-
-
-@app.cell(hide_code=True)
 def cell_transforms_intro():
-    """Introduce the coordinate transforms section."""
+    """Introduce the SmileData coordinate transforms section."""
     mo.md(
         r"""
-        ## Coordinate Transforms — `SmileData`
+        ## Stage 2 — `SmileData` & Coordinate Transforms
 
-        The new **coordinate transform framework** lets you move freely between
-        any combination of X and Y coordinates via `SmileData.transform()`:
+        Call `prices.to_smile_data()` to create a `SmileData` container in
+        **(FixedStrike, Price)** coordinates. From there, `.transform(x, y)`
+        moves freely between any combination of X and Y coordinates:
 
         | X-coordinate | Definition |
         |--------------|------------|
@@ -429,18 +260,16 @@ def cell_transforms_intro():
         | `Volatility` | $\sigma$ |
         | `Variance` | $\sigma^2$ |
         | `TotalVariance` | $\sigma^2 T$ |
-
-        Each class (`OptionChainVols`, `OptionChainPrices`, `UnitisedSpaceVols`)
-        exposes a `.to_smile_data()` method to enter the transform framework.
         """
     )
     return
 
 
 @app.cell
-def cell_smile_data(vols):
-    """Create SmileData from OptionChainVols and show transforms."""
-    sd = vols.to_smile_data()
+def cell_smile_data(prices):
+    """Create SmileData from OptionChainPrices and transform to vols."""
+    sd_prices = prices.to_smile_data()
+    sd = sd_prices.transform(XCoord.FixedStrike, YCoord.Volatility)
     return (sd,)
 
 
@@ -452,6 +281,7 @@ def cell_transforms_table(sd):
         "(Moneyness, Vol)": sd.transform(XCoord.MoneynessStrike, YCoord.Volatility),
         "(LogMoneyness, TotalVar)": sd.transform(XCoord.LogMoneynessStrike, YCoord.TotalVariance),
         "(Standardised, TotalVar)": sd.transform(XCoord.StandardisedStrike, YCoord.TotalVariance),
+        "(FixedStrike, Price)": sd.transform(XCoord.FixedStrike, YCoord.Price),
     }
     tables = []
     for label, v in views.items():
@@ -552,19 +382,20 @@ def cell_svi_intro():
     """Introduce the SVI fitting stage."""
     mo.md(
         r"""
-        ## Stage 4 — SVI Fit
+        ## Stage 3 — SVI Fit
 
-        We pass the `OptionChainVols` directly to `fit_svi`, which uses the
-        mid vols internally. The fitted SVI curve is overlaid on the market data.
+        We pass the `SmileData` (in volatility coordinates) directly to `fit_svi`,
+        which transforms to log-moneyness / total-variance internally.
+        The fitted SVI curve is overlaid on the market data.
         """
     )
     return
 
 
 @app.cell
-def cell_svi_fit(vols):
-    """Fit SVI directly from OptionChainVols."""
-    result = fit_svi(vols)
+def cell_svi_fit(sd):
+    """Fit SVI directly from SmileData."""
+    result = fit_svi(sd)
     p = result.params
     return p, result
 
@@ -595,23 +426,23 @@ def cell_svi_params(p, result, true_params):
 
 
 @app.cell(hide_code=True)
-def cell_svi_plot(forward, expiry, result, vols):
+def cell_svi_plot(forward, expiry, result, sd):
     """Plot market vols with SVI fitted curve in strike space."""
-    _strikes_fine = np.linspace(vols.strikes.min() - 5, vols.strikes.max() + 5, 200)
+    _strikes_fine = np.linspace(sd.x.min() - 5, sd.x.max() + 5, 200)
     _k_fine = np.log(_strikes_fine / forward)
     _iv_fitted = svi_implied_vol(_k_fine, result.params, expiry)
 
     _fig = go.Figure()
     _fig.add_trace(
         go.Scatter(
-            x=vols.strikes,
-            y=vols.vol_mid * 100,
+            x=sd.x,
+            y=sd.y_mid * 100,
             mode="markers",
             error_y={
                 "type": "data",
                 "symmetric": False,
-                "array": ((vols.vol_ask - vols.vol_mid) * 100).tolist(),
-                "arrayminus": ((vols.vol_mid - vols.vol_bid) * 100).tolist(),
+                "array": ((sd.y_ask - sd.y_mid) * 100).tolist(),
+                "arrayminus": ((sd.y_mid - sd.y_bid) * 100).tolist(),
             },
             marker={"size": 9, "color": "#E74C3C"},
             name="Market (bid/ask)",
@@ -652,21 +483,18 @@ def cell_summary():
         r"""
         ## Summary
 
-        This notebook demonstrated the full **qsmile** option chain pipeline:
+        This notebook demonstrated the **qsmile** option chain pipeline:
 
         | Step | Class | Method |
         |------|-------|--------|
         | Raw prices with bid/ask | `OptionChainPrices` | *constructor* — auto-calibrates F, D |
-        | → Implied volatilities | `OptionChainVols` | `.to_vols()` |
-        | → Unitised coordinates | `UnitisedSpaceVols` | `.to_unitised()` |
         | → Any coordinate system | `SmileData` | `.to_smile_data().transform(x, y)` |
-        | → SVI smile fit | `SmileResult` | `fit_svi(vols)` |
+        | → SVI smile fit | `SmileResult` | `fit_svi(sd)` |
 
-        Each stage is a self-contained, validated data container with `.plot()`
-        for quick visualisation. The **coordinate transform framework** lets you
-        freely move between any combination of X-coordinates (Strike, Moneyness,
-        Log-Moneyness, Standardised) and Y-coordinates (Price, Volatility,
-        Variance, Total Variance) via composable, invertible maps.
+        The **coordinate transform framework** lets you freely move between
+        any combination of X-coordinates (Strike, Moneyness, Log-Moneyness,
+        Standardised) and Y-coordinates (Price, Volatility, Variance, Total
+        Variance) via composable, invertible maps.
         """
     )
     return

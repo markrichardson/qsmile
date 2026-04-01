@@ -356,12 +356,10 @@ def cell_23():
         **Chain Demo** notebook which walks through:
 
         1. `OptionChainPrices` — bid/ask prices with auto-calibrated forward & discount factor
-        2. `OptionChainVols` — bid/ask implied vols via Black76 inversion
-        3. `UnitisedSpaceVols` — normalised coordinates for cross-expiry comparison
-        4. `SmileData` — unified container with **coordinate transforms** between
+        2. `SmileData` — unified container with **coordinate transforms** between
            any combination of X-coords (Strike, Moneyness, Log-Moneyness, Standardised)
            and Y-coords (Price, Volatility, Variance, Total Variance)
-        5. `fit_svi(vols)` — SVI fit directly from an `OptionChainVols`
+        3. `fit_svi(sd)` — SVI fit directly from a `SmileData`
 
         **Next steps** — future versions will add SVI-JW parameterisation,
         multi-expiry surface fitting, and arbitrage-free enforcement.

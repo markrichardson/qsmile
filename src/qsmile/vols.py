@@ -8,12 +8,9 @@ from typing import TYPE_CHECKING
 import numpy as np
 from numpy.typing import NDArray
 
-from qsmile.unitised import UnitisedSpaceVols
-
 if TYPE_CHECKING:
     import matplotlib.figure
 
-    from qsmile.prices import OptionChainPrices
     from qsmile.smile_data import SmileData
 
 
@@ -103,25 +100,6 @@ class OptionChainVols:
         atm_idx = int(np.argmin(np.abs(self.strikes - self.forward)))
         return float(self.vol_mid[atm_idx])
 
-    def to_unitised(self) -> UnitisedSpaceVols:
-        """Convert to unitised (normalised) space.
-
-        k_unitised = log(K/F) / (sigma_ATM * sqrt(T))
-        variance = sigma^2 * T
-        """
-        s_atm = self.sigma_atm
-        k_unitised = self.log_moneyness / (s_atm * np.sqrt(self.expiry))
-        variance_bid = self.vol_bid**2 * self.expiry
-        variance_ask = self.vol_ask**2 * self.expiry
-
-        return UnitisedSpaceVols(
-            k_unitised=k_unitised,
-            variance_bid=variance_bid,
-            variance_ask=variance_ask,
-            sigma_atm=s_atm,
-            expiry=self.expiry,
-        )
-
     def to_smile_data(self) -> SmileData:
         """Convert to a SmileData with (FixedStrike, Volatility) coordinates."""
         from qsmile.coords import XCoord, YCoord
@@ -140,27 +118,6 @@ class OptionChainVols:
                 expiry=self.expiry,
                 sigma_atm=self.sigma_atm,
             ),
-        )
-
-    def to_prices(self) -> OptionChainPrices:
-        """Convert vol chain back to prices via Black76."""
-        from qsmile.black76 import black76_call, black76_put
-        from qsmile.prices import OptionChainPrices
-
-        call_bid = black76_call(self.forward, self.strikes, self.discount_factor, self.vol_bid, self.expiry)
-        call_ask = black76_call(self.forward, self.strikes, self.discount_factor, self.vol_ask, self.expiry)
-        put_bid = black76_put(self.forward, self.strikes, self.discount_factor, self.vol_bid, self.expiry)
-        put_ask = black76_put(self.forward, self.strikes, self.discount_factor, self.vol_ask, self.expiry)
-
-        return OptionChainPrices(
-            strikes=self.strikes.copy(),
-            call_bid=np.asarray(call_bid, dtype=np.float64),
-            call_ask=np.asarray(call_ask, dtype=np.float64),
-            put_bid=np.asarray(put_bid, dtype=np.float64),
-            put_ask=np.asarray(put_ask, dtype=np.float64),
-            expiry=self.expiry,
-            forward=self.forward,
-            discount_factor=self.discount_factor,
         )
 
     @classmethod
