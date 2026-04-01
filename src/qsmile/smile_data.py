@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from typing import TYPE_CHECKING
 
 import numpy as np
 from numpy.typing import NDArray
+
+if TYPE_CHECKING:
+    import matplotlib.figure
 
 from qsmile.coords import XCoord, YCoord
 from qsmile.maps import (
@@ -57,6 +61,24 @@ class SmileData:
             )
             raise ValueError(msg)
 
+        if n < 3:
+            msg = f"at least 3 data points required, got {n}"
+            raise ValueError(msg)
+
+        if np.any(self.y_bid > self.y_ask):
+            msg = "y_bid must not exceed y_ask"
+            raise ValueError(msg)
+
+        if self.x_coord in (XCoord.FixedStrike, XCoord.MoneynessStrike) and np.any(self.x <= 0):
+            msg = f"all x values must be positive for {self.x_coord.name}"
+            raise ValueError(msg)
+
+        if self.y_coord in (YCoord.Volatility, YCoord.Variance, YCoord.TotalVariance) and (
+            np.any(self.y_bid < 0) or np.any(self.y_ask < 0)
+        ):
+            msg = f"y values must be non-negative for {self.y_coord.name}"
+            raise ValueError(msg)
+
     @property
     def y_mid(self) -> NDArray[np.float64]:
         """Midpoint of bid and ask Y values."""
@@ -100,4 +122,63 @@ class SmileData:
             x_coord=target_x,
             y_coord=target_y,
             metadata=metadata,
+        )
+
+    @classmethod
+    def from_mid_vols(
+        cls,
+        strikes: NDArray[np.float64],
+        ivs: NDArray[np.float64],
+        forward: float,
+        expiry: float,
+        discount_factor: float = 1.0,
+    ) -> SmileData:
+        """Create from mid implied vols (setting y_bid = y_ask = ivs).
+
+        Parameters
+        ----------
+        strikes : NDArray[np.float64]
+            Strike prices.
+        ivs : NDArray[np.float64]
+            Mid implied volatilities.
+        forward : float
+            Forward price.
+        expiry : float
+            Time to expiry in years.
+        discount_factor : float
+            Discount factor, defaults to 1.0.
+        """
+        strikes = np.asarray(strikes, dtype=np.float64)
+        ivs = np.asarray(ivs, dtype=np.float64)
+        atm_idx = int(np.argmin(np.abs(strikes - forward)))
+        sigma_atm = float(ivs[atm_idx])
+        return cls(
+            x=strikes,
+            y_bid=ivs,
+            y_ask=ivs.copy(),
+            x_coord=XCoord.FixedStrike,
+            y_coord=YCoord.Volatility,
+            metadata=SmileMetadata(
+                forward=forward,
+                discount_factor=discount_factor,
+                expiry=expiry,
+                sigma_atm=sigma_atm,
+            ),
+        )
+
+    def plot(self, *, title: str = "Smile Data") -> matplotlib.figure.Figure:
+        """Plot bid/ask Y-values as error bars vs X.
+
+        Axis labels are derived from coordinate names.
+        """
+        from qsmile.plot import plot_bid_ask
+
+        return plot_bid_ask(
+            self.x,
+            self.y_mid,
+            self.y_bid,
+            self.y_ask,
+            xlabel=self.x_coord.name,
+            ylabel=self.y_coord.name,
+            title=title,
         )

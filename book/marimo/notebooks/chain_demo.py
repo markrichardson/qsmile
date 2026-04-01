@@ -177,7 +177,8 @@ def cell_prices_result(discount_factor, forward, prices):
     """
             ),
             mo.md("### Price Data"),
-            mo.ui.table(df_prices),
+            # mo.ui.table(df_prices),
+            print(df_prices),
         ]
     )
     return
@@ -276,26 +277,26 @@ def cell_smile_data(prices):
 @app.cell(hide_code=True)
 def cell_transforms_table(sd):
     """Show the original data and several coordinate views."""
-    views = {
+    {
         "(FixedStrike, Vol)": sd,
         "(Moneyness, Vol)": sd.transform(XCoord.MoneynessStrike, YCoord.Volatility),
         "(LogMoneyness, TotalVar)": sd.transform(XCoord.LogMoneynessStrike, YCoord.TotalVariance),
         "(Standardised, TotalVar)": sd.transform(XCoord.StandardisedStrike, YCoord.TotalVariance),
         "(FixedStrike, Price)": sd.transform(XCoord.FixedStrike, YCoord.Price),
     }
-    tables = []
-    for label, v in views.items():
-        df = pd.DataFrame(
-            {
-                "X": v.x.round(4),
-                "Y Bid": v.y_bid.round(6),
-                "Y Mid": v.y_mid.round(6),
-                "Y Ask": v.y_ask.round(6),
-            }
-        )
-        tables.append(mo.md(f"**{label}** — `x_coord={v.x_coord.name}`, `y_coord={v.y_coord.name}`"))
-        tables.append(mo.ui.table(df))
-    mo.vstack(tables)
+    # tables = []
+    # for label, v in views.items():
+    #     df = pd.DataFrame(
+    #         {
+    #             "X": v.x.round(4),
+    #             "Y Bid": v.y_bid.round(6),
+    #             "Y Mid": v.y_mid.round(6),
+    #             "Y Ask": v.y_ask.round(6),
+    #         }
+    #     )
+    #     tables.append(mo.md(f"**{label}** — `x_coord={v.x_coord.name}`, `y_coord={v.y_coord.name}`"))
+    #     tables.append(df)
+    # mo.vstack(tables)
     return
 
 
@@ -426,7 +427,7 @@ def cell_svi_params(p, result, true_params):
 
 
 @app.cell(hide_code=True)
-def cell_svi_plot(forward, expiry, result, sd):
+def cell_svi_plot(expiry, forward, result, sd):
     """Plot market vols with SVI fitted curve in strike space."""
     _strikes_fine = np.linspace(sd.x.min() - 5, sd.x.max() + 5, 200)
     _k_fine = np.log(_strikes_fine / forward)

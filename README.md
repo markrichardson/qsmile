@@ -33,7 +33,7 @@
 
 - **Bid/ask option prices** — `OptionChainPrices` stores bid/ask call and put prices, and automatically calibrates the forward and discount factor from put-call parity using quasi-delta weighted least squares.
 - **Coordinate transforms** — `SmileData` is a unified container with `.transform(x, y)` to freely convert between any combination of X-coordinates (Strike, Moneyness, Log-Moneyness, Standardised) and Y-coordinates (Price, Volatility, Variance, Total Variance) via composable, invertible maps.
-- **SVI fitting** — Fit the SVI raw parameterisation to `OptionChainVols` or `SmileData`:
+- **SVI fitting** — Fit the SVI raw parameterisation to `SmileData`:
 
 $$w(k) = a + b\left(\rho(k - m) + \sqrt{(k - m)^2 + \sigma^2}\right)$$
 
@@ -96,16 +96,16 @@ print(result.rmse)     # Root mean square error
 
 ```python +RHIZA_SKIP
 import numpy as np
-from qsmile import OptionChainVols, fit_svi
+from qsmile import SmileData, fit_svi
 
-chain = OptionChainVols.from_mid_vols(
+sd = SmileData.from_mid_vols(
     strikes=np.array([80, 90, 100, 110, 120], dtype=float),
     ivs=np.array([0.28, 0.22, 0.18, 0.17, 0.19]),
     forward=100.0,
     expiry=0.5,
 )
 
-result = fit_svi(chain)
+result = fit_svi(sd)
 print(result.params)   # Fitted SVIParams
 print(result.rmse)     # Root mean square error
 ```
@@ -119,16 +119,13 @@ print(result.rmse)     # Root mean square error
 | Class | Description |
 |---|---|
 | `OptionChainPrices` | Bid/ask call and put prices with automatic forward/DF calibration |
-| `OptionChainVols` | Bid/ask implied volatilities |
-| `UnitisedSpaceVols` | Normalised coordinates for cross-expiry comparison |
-| `SmileData` | Unified coordinate-labelled container with `.transform(x, y)` |
+| `SmileData` | Unified coordinate-labelled container with `.transform(x, y)` and `.from_mid_vols()` factory |
 
 ### Coordinate transforms
 
 ```
 OptionChainPrices ─── .to_smile_data() ──→ SmileData ─── .transform(x, y) ──→ SmileData
-OptionChainVols   ─── .to_smile_data() ──→ SmileData       ↑
-UnitisedSpaceVols ─── .to_smile_data() ──→ SmileData ──────┘
+SmileData.from_mid_vols(...)            ──→ SmileData ───────────────────────────┘
 ```
 
 | Coordinate type | Values |
@@ -140,7 +137,7 @@ UnitisedSpaceVols ─── .to_smile_data() ──→ SmileData ─────
 
 | Function / Class | Description |
 |---|---|
-| `fit_svi(chain)` | Fit SVI params — accepts `OptionChainVols` or `SmileData` |
+| `fit_svi(chain)` | Fit SVI params from `SmileData` |
 | `SmileResult` | Fitted result with `.params`, `.rmse`, `.fitted_vols` |
 | `SVIParams` | SVI parameters `(a, b, rho, m, sigma)` |
 | `svi_total_variance(k, params)` | Evaluate SVI total variance at log-moneyness `k` |

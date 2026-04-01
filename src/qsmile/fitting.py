@@ -11,7 +11,6 @@ from scipy.optimize import least_squares
 from qsmile.coords import XCoord, YCoord
 from qsmile.smile_data import SmileData
 from qsmile.svi import SVIParams, svi_total_variance
-from qsmile.vols import OptionChainVols
 
 
 @dataclass
@@ -71,14 +70,14 @@ def _residuals(x: NDArray[np.float64], k: NDArray[np.float64], w_obs: NDArray[np
     return w_model - w_obs
 
 
-def fit_svi(chain: OptionChainVols | SmileData, initial_params: SVIParams | None = None) -> SmileResult:
+def fit_svi(chain: SmileData, initial_params: SVIParams | None = None) -> SmileResult:
     """Fit SVI raw parameters to option chain data.
 
     Parameters
     ----------
-    chain : OptionChainVols | SmileData
-        Market data to fit. Uses mid vols for fitting.
-        If SmileData, transforms to (LogMoneynessStrike, TotalVariance) internally.
+    chain : SmileData
+        Market data to fit. Uses mid values for fitting.
+        Internally transforms to (LogMoneynessStrike, TotalVariance).
     initial_params : SVIParams, optional
         Initial parameter guess. If None, a heuristic guess is computed.
 
@@ -87,13 +86,9 @@ def fit_svi(chain: OptionChainVols | SmileData, initial_params: SVIParams | None
     SmileResult
         Fitted parameters, residuals, RMSE, and convergence status.
     """
-    if isinstance(chain, SmileData):
-        sd = chain.transform(XCoord.LogMoneynessStrike, YCoord.TotalVariance)
-        k = sd.x
-        w_obs = sd.y_mid
-    else:
-        k = chain.log_moneyness
-        w_obs = chain.total_variance
+    sd = chain.transform(XCoord.LogMoneynessStrike, YCoord.TotalVariance)
+    k = sd.x
+    w_obs = sd.y_mid
 
     if initial_params is not None:
         x0 = np.array(
