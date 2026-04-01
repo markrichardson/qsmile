@@ -1,6 +1,6 @@
 [project]
 name = "qsmile"
-version = "0.0.1-rc.2"
+version = "0.0.1-rc.3"
 description = "Volatility Smile Modelling"
 readme = "README.md"
 requires-python = ">=3.11"
