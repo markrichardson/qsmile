@@ -11,6 +11,7 @@ from numpy.typing import NDArray
 if TYPE_CHECKING:
     import matplotlib.figure
 
+    from qsmile.smile_data import SmileData
     from qsmile.vols import OptionChainVols
 
 
@@ -103,6 +104,26 @@ class UnitisedSpaceVols:
             forward=forward,
             discount_factor=discount_factor,
             expiry=self.expiry,
+        )
+
+    def to_smile_data(self) -> SmileData:
+        """Convert to a SmileData with (StandardisedStrike, TotalVariance) coordinates."""
+        from qsmile.coords import XCoord, YCoord
+        from qsmile.metadata import SmileMetadata
+        from qsmile.smile_data import SmileData
+
+        return SmileData(
+            x=self.k_unitised.copy(),
+            y_bid=self.variance_bid.copy(),
+            y_ask=self.variance_ask.copy(),
+            x_coord=XCoord.StandardisedStrike,
+            y_coord=YCoord.TotalVariance,
+            metadata=SmileMetadata(
+                forward=1.0,  # Not available in unitised space; placeholder
+                discount_factor=1.0,  # Not available in unitised space; placeholder
+                expiry=self.expiry,
+                sigma_atm=self.sigma_atm,
+            ),
         )
 
     def plot(self, *, title: str = "Unitised Space Volatilities") -> matplotlib.figure.Figure:

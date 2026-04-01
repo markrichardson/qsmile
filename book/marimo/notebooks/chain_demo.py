@@ -29,6 +29,8 @@ with app.setup:
     from qsmile import (
         OptionChainPrices,
         SVIParams,
+        XCoord,
+        YCoord,
         fit_svi,
         svi_implied_vol,
     )
@@ -157,7 +159,7 @@ def cell_prices(call_ask, call_bid, expiry, put_ask, put_bid, strikes):
 @app.cell(hide_code=True)
 def cell_prices_result(discount_factor, forward, prices):
     """Display calibrated forward/DF and compare to true values."""
-    df = pd.DataFrame(
+    df_prices = pd.DataFrame(
         {
             "Strike": prices.strikes,
             "Call Bid": prices.call_bid.round(4),
@@ -178,7 +180,7 @@ def cell_prices_result(discount_factor, forward, prices):
     """
             ),
             mo.md("### Price Data"),
-            mo.ui.table(df),
+            mo.ui.table(df_prices),
         ]
     )
     return
@@ -398,6 +400,147 @@ def cell_unitised_plot(unitised):
 
 
 @app.cell(hide_code=True)
+def cell_divider_transforms():
+    """Section divider."""
+    mo.md(r"""---""")
+    return
+
+
+@app.cell(hide_code=True)
+def cell_transforms_intro():
+    """Introduce the coordinate transforms section."""
+    mo.md(
+        r"""
+        ## Coordinate Transforms — `SmileData`
+
+        The new **coordinate transform framework** lets you move freely between
+        any combination of X and Y coordinates via `SmileData.transform()`:
+
+        | X-coordinate | Definition |
+        |--------------|------------|
+        | `FixedStrike` | $K$ |
+        | `MoneynessStrike` | $K / F$ |
+        | `LogMoneynessStrike` | $\ln(K / F)$ |
+        | `StandardisedStrike` | $\ln(K / F) / (\sigma_{\mathrm{ATM}} \sqrt{T})$ |
+
+        | Y-coordinate | Definition |
+        |--------------|------------|
+        | `Price` | Black76 option price |
+        | `Volatility` | $\sigma$ |
+        | `Variance` | $\sigma^2$ |
+        | `TotalVariance` | $\sigma^2 T$ |
+
+        Each class (`OptionChainVols`, `OptionChainPrices`, `UnitisedSpaceVols`)
+        exposes a `.to_smile_data()` method to enter the transform framework.
+        """
+    )
+    return
+
+
+@app.cell
+def cell_smile_data(vols):
+    """Create SmileData from OptionChainVols and show transforms."""
+    sd = vols.to_smile_data()
+    return (sd,)
+
+
+@app.cell(hide_code=True)
+def cell_transforms_table(sd):
+    """Show the original data and several coordinate views."""
+    views = {
+        "(FixedStrike, Vol)": sd,
+        "(Moneyness, Vol)": sd.transform(XCoord.MoneynessStrike, YCoord.Volatility),
+        "(LogMoneyness, TotalVar)": sd.transform(XCoord.LogMoneynessStrike, YCoord.TotalVariance),
+        "(Standardised, TotalVar)": sd.transform(XCoord.StandardisedStrike, YCoord.TotalVariance),
+    }
+    tables = []
+    for label, v in views.items():
+        df = pd.DataFrame(
+            {
+                "X": v.x.round(4),
+                "Y Bid": v.y_bid.round(6),
+                "Y Mid": v.y_mid.round(6),
+                "Y Ask": v.y_ask.round(6),
+            }
+        )
+        tables.append(mo.md(f"**{label}** — `x_coord={v.x_coord.name}`, `y_coord={v.y_coord.name}`"))
+        tables.append(mo.ui.table(df))
+    mo.vstack(tables)
+    return
+
+
+@app.cell(hide_code=True)
+def cell_transforms_plot(sd):
+    """Plot the same smile in four coordinate systems."""
+    coords = [
+        ("FixedStrike / Volatility", XCoord.FixedStrike, YCoord.Volatility, "Strike", "σ"),
+        ("MoneynessStrike / Volatility", XCoord.MoneynessStrike, YCoord.Volatility, "K/F", "σ"),
+        ("LogMoneynessStrike / TotalVariance", XCoord.LogMoneynessStrike, YCoord.TotalVariance, "ln(K/F)", "σ²T"),
+        (
+            "StandardisedStrike / TotalVariance",
+            XCoord.StandardisedStrike,
+            YCoord.TotalVariance,
+            "k̃",
+            "σ²T",
+        ),
+    ]
+    from plotly.subplots import make_subplots
+
+    _fig = make_subplots(rows=2, cols=2, subplot_titles=[c[0] for c in coords])
+    colors = ["#2196F3", "#E74C3C", "#2FA4A9", "#9B59B6"]
+    for idx, (title, xc, yc, xlabel, ylabel) in enumerate(coords):
+        view = sd.transform(xc, yc)
+        row, col = divmod(idx, 2)
+        _fig.add_trace(
+            go.Scatter(
+                x=view.x,
+                y=view.y_mid,
+                mode="markers+lines",
+                marker={"color": colors[idx], "size": 6},
+                line={"color": colors[idx]},
+                name=title,
+                showlegend=False,
+            ),
+            row=row + 1,
+            col=col + 1,
+        )
+        _fig.update_xaxes(title_text=xlabel, row=row + 1, col=col + 1)
+        _fig.update_yaxes(title_text=ylabel, row=row + 1, col=col + 1)
+    _fig.update_layout(
+        title="Same Smile — Four Coordinate Systems",
+        template="plotly_white",
+        height=650,
+    )
+    mo.ui.plotly(_fig)
+    return
+
+
+@app.cell(hide_code=True)
+def cell_roundtrip(sd):
+    """Demonstrate round-trip fidelity."""
+    # Go FixedStrike/Vol → Standardised/TotalVar → back
+    there = sd.transform(XCoord.StandardisedStrike, YCoord.TotalVariance)
+    back = there.transform(XCoord.FixedStrike, YCoord.Volatility)
+    max_x_err = float(np.max(np.abs(back.x - sd.x)))
+    max_y_err = float(np.max(np.abs(back.y_mid - sd.y_mid)))
+    mo.md(
+        f"""
+    ### Round-Trip Fidelity
+
+    Transform **FixedStrike / Volatility → StandardisedStrike / TotalVariance → back**:
+
+    | Metric | Value |
+    |--------|-------|
+    | Max X error (strikes) | {max_x_err:.2e} |
+    | Max Y error (mid vol) | {max_y_err:.2e} |
+
+    Round-trip is exact to within floating-point precision.
+    """
+    )
+    return
+
+
+@app.cell(hide_code=True)
 def cell_divider_3():
     """Section divider."""
     mo.md(r"""---""")
@@ -516,12 +659,14 @@ def cell_summary():
         | Raw prices with bid/ask | `OptionChainPrices` | *constructor* — auto-calibrates F, D |
         | → Implied volatilities | `OptionChainVols` | `.to_vols()` |
         | → Unitised coordinates | `UnitisedSpaceVols` | `.to_unitised()` |
+        | → Any coordinate system | `SmileData` | `.to_smile_data().transform(x, y)` |
         | → SVI smile fit | `SmileResult` | `fit_svi(vols)` |
 
         Each stage is a self-contained, validated data container with `.plot()`
-        for quick visualisation. The forward/discount factor calibration uses
-        quasi-delta weighted least squares on put-call parity, and the Black76
-        inversion automatically selects calls or puts based on moneyness.
+        for quick visualisation. The **coordinate transform framework** lets you
+        freely move between any combination of X-coordinates (Strike, Moneyness,
+        Log-Moneyness, Standardised) and Y-coordinates (Price, Volatility,
+        Variance, Total Variance) via composable, invertible maps.
         """
     )
     return

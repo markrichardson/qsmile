@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     import matplotlib.figure
 
     from qsmile.prices import OptionChainPrices
+    from qsmile.smile_data import SmileData
 
 
 @dataclass
@@ -119,6 +120,26 @@ class OptionChainVols:
             variance_ask=variance_ask,
             sigma_atm=s_atm,
             expiry=self.expiry,
+        )
+
+    def to_smile_data(self) -> SmileData:
+        """Convert to a SmileData with (FixedStrike, Volatility) coordinates."""
+        from qsmile.coords import XCoord, YCoord
+        from qsmile.metadata import SmileMetadata
+        from qsmile.smile_data import SmileData
+
+        return SmileData(
+            x=self.strikes.copy(),
+            y_bid=self.vol_bid.copy(),
+            y_ask=self.vol_ask.copy(),
+            x_coord=XCoord.FixedStrike,
+            y_coord=YCoord.Volatility,
+            metadata=SmileMetadata(
+                forward=self.forward,
+                discount_factor=self.discount_factor,
+                expiry=self.expiry,
+                sigma_atm=self.sigma_atm,
+            ),
         )
 
     def to_prices(self) -> OptionChainPrices:

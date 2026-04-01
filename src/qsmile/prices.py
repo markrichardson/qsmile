@@ -14,6 +14,7 @@ from qsmile.black76 import black76_implied_vol
 if TYPE_CHECKING:
     import matplotlib.figure
 
+    from qsmile.smile_data import SmileData
     from qsmile.vols import OptionChainVols
 
 
@@ -219,6 +220,31 @@ class OptionChainPrices:
             forward=self.forward,
             discount_factor=self.discount_factor,
             expiry=self.expiry,
+        )
+
+    def to_smile_data(self) -> SmileData:
+        """Convert to a SmileData with (FixedStrike, Price) coordinates.
+
+        Uses call mid-market prices as the Y-values.
+        """
+        from qsmile.coords import XCoord, YCoord
+        from qsmile.metadata import SmileMetadata
+        from qsmile.smile_data import SmileData
+
+        assert self.forward is not None  # noqa: S101
+        assert self.discount_factor is not None  # noqa: S101
+
+        return SmileData(
+            x=self.strikes.copy(),
+            y_bid=self.call_bid.copy(),
+            y_ask=self.call_ask.copy(),
+            x_coord=XCoord.FixedStrike,
+            y_coord=YCoord.Price,
+            metadata=SmileMetadata(
+                forward=self.forward,
+                discount_factor=self.discount_factor,
+                expiry=self.expiry,
+            ),
         )
 
     def plot(self, *, title: str = "Option Chain Prices") -> matplotlib.figure.Figure:
