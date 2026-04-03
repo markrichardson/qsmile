@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import contextlib
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 import cvxpy as cp
 import numpy as np
 from numpy.typing import NDArray
+from scipy.stats import norm
 
 if TYPE_CHECKING:
     import matplotlib.figure
@@ -78,6 +80,86 @@ def _calibrate_forward_df(
     F_val = float(df_times_f.value) / D_val
 
     return F_val, D_val
+
+
+def delta_blend_ivols(
+    call_bid_ivols: NDArray[np.float64],
+    call_ask_ivols: NDArray[np.float64],
+    put_bid_ivols: NDArray[np.float64],
+    put_ask_ivols: NDArray[np.float64],
+    strikes: NDArray[np.float64],
+    forward: float,
+    expiry: float,
+) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    """Blend call and put implied vols using Black76 undiscounted call-delta weights.
+
+    At each strike K, the blending weight is w(K) = Phi(d1) where
+    d1 = [ln(F/K) + 0.5 * sigma_C^2 * t] / (sigma_C * sqrt(t))
+    and sigma_C is the mid call-implied vol at that strike.
+
+    The blended vol is: sigma = w * sigma_C + (1 - w) * sigma_P.
+    Bid and ask are blended independently with the same weights.
+
+    NaN values in input vols indicate inversion failures. At such strikes
+    the blended vol falls back to the available option type. If neither
+    is available, the strike is excluded (NaN in output).
+
+    Parameters
+    ----------
+    call_bid_ivols : NDArray[np.float64]
+        Call-implied bid vols (NaN where inversion failed).
+    call_ask_ivols : NDArray[np.float64]
+        Call-implied ask vols (NaN where inversion failed).
+    put_bid_ivols : NDArray[np.float64]
+        Put-implied bid vols (NaN where inversion failed).
+    put_ask_ivols : NDArray[np.float64]
+        Put-implied ask vols (NaN where inversion failed).
+    strikes : NDArray[np.float64]
+        Strike prices.
+    forward : float
+        Forward price.
+    expiry : float
+        Time to expiry in years.
+
+    Returns:
+    -------
+    tuple[NDArray[np.float64], NDArray[np.float64]]
+        (blended_bid_ivols, blended_ask_ivols). Strikes where neither
+        call nor put vol is available will have NaN.
+    """
+    call_mid = (call_bid_ivols + call_ask_ivols) / 2.0
+    sqrt_t = np.sqrt(expiry)
+
+    # Compute delta weights from call mid vol
+    # Where call vol is NaN, use put mid vol for delta calc; if both NaN, weight = NaN
+    put_mid = (put_bid_ivols + put_ask_ivols) / 2.0
+    sigma_for_delta = np.where(np.isnan(call_mid), put_mid, call_mid)
+    safe_sigma = np.where(np.isnan(sigma_for_delta), 1.0, sigma_for_delta)
+    safe_sigma = np.where(safe_sigma <= 0, 1e-8, safe_sigma)
+
+    d1 = (np.log(forward / strikes) + 0.5 * safe_sigma**2 * expiry) / (safe_sigma * sqrt_t)
+    w = norm.cdf(d1)
+
+    # Mask NaN vols: if call is NaN, force weight to 0 (use put); if put is NaN, force to 1 (use call)
+    call_available = ~np.isnan(call_bid_ivols)
+    put_available = ~np.isnan(put_bid_ivols)
+
+    # Both missing → NaN
+    neither = ~call_available & ~put_available
+    w = np.where(call_available & ~put_available, 1.0, w)
+    w = np.where(~call_available & put_available, 0.0, w)
+    w = np.where(neither, np.nan, w)
+
+    # Replace NaN vols with 0 for arithmetic (masked by weight)
+    cb = np.where(np.isnan(call_bid_ivols), 0.0, call_bid_ivols)
+    ca = np.where(np.isnan(call_ask_ivols), 0.0, call_ask_ivols)
+    pb = np.where(np.isnan(put_bid_ivols), 0.0, put_bid_ivols)
+    pa = np.where(np.isnan(put_ask_ivols), 0.0, put_ask_ivols)
+
+    blended_bid = w * cb + (1.0 - w) * pb
+    blended_ask = w * ca + (1.0 - w) * pa
+
+    return blended_bid, blended_ask
 
 
 @dataclass
@@ -199,6 +281,86 @@ class OptionChain:
                 forward=self.forward,
                 discount_factor=self.discount_factor,
                 expiry=self.expiry,
+            ),
+        )
+
+    def to_smile_data_blended(self) -> SmileData:
+        """Convert to a SmileData with (FixedStrike, Volatility) using delta-blended vols.
+
+        Inverts both call and put prices to implied vols at every strike, then
+        blends them using Black76 undiscounted call-delta weights. OTM options
+        dominate in each wing; ATM is approximately equal-weighted.
+
+        Strikes where neither call nor put vol can be computed are excluded.
+        """
+        from qsmile.core.black76 import black76_implied_vol
+        from qsmile.core.coords import XCoord, YCoord
+        from qsmile.data.meta import SmileMetadata
+        from qsmile.data.vols import SmileData
+
+        assert self.forward is not None  # noqa: S101
+        assert self.discount_factor is not None  # noqa: S101
+
+        n = len(self.strikes)
+
+        # Invert call and put prices to implied vols (NaN on failure)
+        call_bid_iv = np.full(n, np.nan)
+        call_ask_iv = np.full(n, np.nan)
+        put_bid_iv = np.full(n, np.nan)
+        put_ask_iv = np.full(n, np.nan)
+
+        for i in range(n):
+            k = float(self.strikes[i])
+            with contextlib.suppress(ValueError):
+                call_bid_iv[i] = black76_implied_vol(
+                    float(self.call_bid[i]), self.forward, k, self.discount_factor, self.expiry, is_call=True
+                )
+            with contextlib.suppress(ValueError):
+                call_ask_iv[i] = black76_implied_vol(
+                    float(self.call_ask[i]), self.forward, k, self.discount_factor, self.expiry, is_call=True
+                )
+            with contextlib.suppress(ValueError):
+                put_bid_iv[i] = black76_implied_vol(
+                    float(self.put_bid[i]), self.forward, k, self.discount_factor, self.expiry, is_call=False
+                )
+            with contextlib.suppress(ValueError):
+                put_ask_iv[i] = black76_implied_vol(
+                    float(self.put_ask[i]), self.forward, k, self.discount_factor, self.expiry, is_call=False
+                )
+
+        # Blend using delta weights
+        blended_bid, blended_ask = delta_blend_ivols(
+            call_bid_iv,
+            call_ask_iv,
+            put_bid_iv,
+            put_ask_iv,
+            self.strikes,
+            self.forward,
+            self.expiry,
+        )
+
+        # Exclude strikes where neither vol is available
+        valid = ~np.isnan(blended_bid) & ~np.isnan(blended_ask)
+        strikes_out = self.strikes[valid]
+        bid_out = blended_bid[valid]
+        ask_out = blended_ask[valid]
+
+        # Derive sigma_atm from blended mid at ATM strike
+        mid_out = (bid_out + ask_out) / 2.0
+        atm_idx = int(np.argmin(np.abs(strikes_out - self.forward)))
+        sigma_atm = float(mid_out[atm_idx])
+
+        return SmileData(
+            x=strikes_out,
+            y_bid=bid_out,
+            y_ask=ask_out,
+            x_coord=XCoord.FixedStrike,
+            y_coord=YCoord.Volatility,
+            metadata=SmileMetadata(
+                forward=self.forward,
+                discount_factor=self.discount_factor,
+                expiry=self.expiry,
+                sigma_atm=sigma_atm,
             ),
         )
 

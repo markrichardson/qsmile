@@ -7,7 +7,7 @@ import pytest
 
 from qsmile.core.black76 import black76_call, black76_put
 from qsmile.core.coords import XCoord, YCoord
-from qsmile.data.prices import OptionChain, _calibrate_forward_df
+from qsmile.data.prices import OptionChain, _calibrate_forward_df, delta_blend_ivols
 
 
 def _make_prices(
@@ -282,3 +282,204 @@ class TestDenoise:
         chain2 = OptionChain(**data2)
         clean2 = chain2.denoise()
         assert data["strikes"][bad_idx] not in clean2.strikes
+
+
+class TestDeltaBlendIvols:
+    """Tests for delta_blend_ivols blending function."""
+
+    def _flat_vols(
+        self,
+        vol: float = 0.20,
+        spread: float = 0.005,
+        forward: float = 100.0,
+        expiry: float = 0.5,
+    ) -> dict:
+        """Build flat-vol inputs for delta_blend_ivols."""
+        strikes = np.array([80.0, 90.0, 95.0, 100.0, 105.0, 110.0, 120.0])
+        n = len(strikes)
+        bid = np.full(n, vol - spread)
+        ask = np.full(n, vol + spread)
+        return {
+            "call_bid_ivols": bid.copy(),
+            "call_ask_ivols": ask.copy(),
+            "put_bid_ivols": bid.copy(),
+            "put_ask_ivols": ask.copy(),
+            "strikes": strikes,
+            "forward": forward,
+            "expiry": expiry,
+        }
+
+    def test_atm_equal_weight(self):
+        """At ATM (K==F) with identical call/put vols, blending is 50/50."""
+        data = self._flat_vols()
+        blended_bid, blended_ask = delta_blend_ivols(**data)
+        atm_idx = int(np.argmin(np.abs(data["strikes"] - data["forward"])))
+        # When call and put vols are identical, blend equals either
+        np.testing.assert_allclose(blended_bid[atm_idx], data["call_bid_ivols"][atm_idx], atol=1e-10)
+        np.testing.assert_allclose(blended_ask[atm_idx], data["call_ask_ivols"][atm_idx], atol=1e-10)
+
+    def test_deep_otm_call_uses_call_vol(self):
+        """Far below forward (deep ITM put wing), call vol dominates."""
+        call_vols = np.array([0.30, 0.25, 0.22, 0.20, 0.22, 0.25, 0.30])
+        put_vols = np.array([0.35, 0.28, 0.23, 0.20, 0.23, 0.28, 0.35])
+        strikes = np.array([60.0, 80.0, 90.0, 100.0, 110.0, 120.0, 140.0])
+        blended_bid, _ = delta_blend_ivols(
+            call_vols,
+            call_vols,
+            put_vols,
+            put_vols,
+            strikes,
+            100.0,
+            0.5,
+        )
+        # At K=60 (deep below F), weight → 1, should be very close to call vol
+        assert blended_bid[0] == pytest.approx(call_vols[0], abs=0.01)
+
+    def test_deep_otm_put_uses_put_vol(self):
+        """Far above forward (deep OTM put wing), put vol dominates."""
+        call_vols = np.array([0.30, 0.25, 0.22, 0.20, 0.22, 0.25, 0.30])
+        put_vols = np.array([0.35, 0.28, 0.23, 0.20, 0.23, 0.28, 0.35])
+        strikes = np.array([60.0, 80.0, 90.0, 100.0, 110.0, 120.0, 140.0])
+        blended_bid, _ = delta_blend_ivols(
+            call_vols,
+            call_vols,
+            put_vols,
+            put_vols,
+            strikes,
+            100.0,
+            0.5,
+        )
+        # At K=140 (deep above F), weight → 0, should be very close to put vol
+        assert blended_bid[-1] == pytest.approx(put_vols[-1], abs=0.01)
+
+    def test_weights_monotonically_decrease(self):
+        """Delta weights should decrease monotonically with strike."""
+        from scipy.stats import norm as _norm
+
+        data = self._flat_vols()
+        vol = 0.20
+        sqrt_t = np.sqrt(data["expiry"])
+        d1 = (np.log(data["forward"] / data["strikes"]) + 0.5 * vol**2 * data["expiry"]) / (vol * sqrt_t)
+        weights = _norm.cdf(d1)
+        assert np.all(np.diff(weights) < 0)
+
+    def test_bid_ask_independent(self):
+        """Bid and ask are blended independently with same weights."""
+        data = self._flat_vols(vol=0.20, spread=0.01)
+        # Give puts a different spread
+        data["put_bid_ivols"] = np.full(7, 0.18)
+        data["put_ask_ivols"] = np.full(7, 0.22)
+        blended_bid, blended_ask = delta_blend_ivols(**data)
+        # Spread preserved — blended ask >= blended bid everywhere
+        assert np.all(blended_ask >= blended_bid - 1e-15)
+
+
+class TestToSmileDataBlended:
+    """Tests for OptionChain.to_smile_data_blended()."""
+
+    def test_returns_vol_coordinates(self):
+        data = _make_prices(vol=0.25, spread=0.005)
+        chain = OptionChain(**data)
+        sd = chain.to_smile_data_blended()
+        assert sd.x_coord == XCoord.FixedStrike
+        assert sd.y_coord == YCoord.Volatility
+
+    def test_blended_vols_close_to_known_vol(self):
+        """With flat-vol Black76 prices, blended vols should recover the input vol."""
+        data = _make_prices(vol=0.25, spread=0.005)
+        chain = OptionChain(**data)
+        sd = chain.to_smile_data_blended()
+        np.testing.assert_allclose(sd.y_mid, 0.25, atol=0.002)
+
+    def test_sigma_atm_derived(self):
+        data = _make_prices(vol=0.25, spread=0.005)
+        chain = OptionChain(**data)
+        sd = chain.to_smile_data_blended()
+        assert sd.metadata.sigma_atm is not None
+        assert sd.metadata.sigma_atm == pytest.approx(0.25, abs=0.002)
+
+    def test_metadata_populated(self):
+        data = _make_prices(forward=100.0, discount_factor=0.98)
+        chain = OptionChain(**data)
+        sd = chain.to_smile_data_blended()
+        assert sd.metadata.forward == pytest.approx(100.0, rel=1e-3)
+        assert sd.metadata.discount_factor == pytest.approx(0.98, rel=1e-2)
+        assert sd.metadata.expiry == data["expiry"]
+
+    def test_bid_ask_preserved(self):
+        data = _make_prices(vol=0.25, spread=0.01)
+        chain = OptionChain(**data)
+        sd = chain.to_smile_data_blended()
+        assert np.all(sd.y_ask >= sd.y_bid)
+
+
+class TestInversionFailureFallback:
+    """Tests for graceful handling when vol inversion fails."""
+
+    def test_call_failure_uses_put_vol(self):
+        """When call vol can't be computed, put vol is used."""
+        call_bid = np.array([np.nan, 0.20, 0.20])
+        call_ask = np.array([np.nan, 0.21, 0.21])
+        put_bid = np.array([0.22, 0.20, 0.20])
+        put_ask = np.array([0.23, 0.21, 0.21])
+        strikes = np.array([90.0, 100.0, 110.0])
+        blended_bid, blended_ask = delta_blend_ivols(
+            call_bid,
+            call_ask,
+            put_bid,
+            put_ask,
+            strikes,
+            100.0,
+            0.5,
+        )
+        # At strike 0: call NaN → weight forced to 0 → use put vol
+        assert blended_bid[0] == pytest.approx(0.22)
+        assert blended_ask[0] == pytest.approx(0.23)
+
+    def test_put_failure_uses_call_vol(self):
+        """When put vol can't be computed, call vol is used."""
+        call_bid = np.array([0.20, 0.20, 0.22])
+        call_ask = np.array([0.21, 0.21, 0.23])
+        put_bid = np.array([0.20, 0.20, np.nan])
+        put_ask = np.array([0.21, 0.21, np.nan])
+        strikes = np.array([90.0, 100.0, 110.0])
+        blended_bid, blended_ask = delta_blend_ivols(
+            call_bid,
+            call_ask,
+            put_bid,
+            put_ask,
+            strikes,
+            100.0,
+            0.5,
+        )
+        # At strike 2: put NaN → weight forced to 1 → use call vol
+        assert blended_bid[2] == pytest.approx(0.22)
+        assert blended_ask[2] == pytest.approx(0.23)
+
+    def test_both_failure_returns_nan(self):
+        """When neither vol is available, NaN is returned."""
+        call_bid = np.array([np.nan, 0.20, 0.20])
+        call_ask = np.array([np.nan, 0.21, 0.21])
+        put_bid = np.array([np.nan, 0.20, 0.20])
+        put_ask = np.array([np.nan, 0.21, 0.21])
+        strikes = np.array([90.0, 100.0, 110.0])
+        blended_bid, blended_ask = delta_blend_ivols(
+            call_bid,
+            call_ask,
+            put_bid,
+            put_ask,
+            strikes,
+            100.0,
+            0.5,
+        )
+        assert np.isnan(blended_bid[0])
+        assert np.isnan(blended_ask[0])
+
+    def test_to_smile_data_blended_excludes_nan_strikes(self):
+        """to_smile_data_blended excludes strikes where neither vol is available."""
+        data = _make_prices(vol=0.25, spread=0.005)
+        chain = OptionChain(**data)
+        sd = chain.to_smile_data_blended()
+        assert not np.any(np.isnan(sd.y_bid))
+        assert not np.any(np.isnan(sd.y_ask))
+        assert len(sd.x) == len(chain.strikes)

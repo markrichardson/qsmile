@@ -5,7 +5,7 @@ from __future__ import annotations
 from qsmile.core.black76 import black76_call, black76_implied_vol, black76_put
 from qsmile.core.coords import XCoord, YCoord
 from qsmile.data.meta import SmileMetadata
-from qsmile.data.prices import OptionChain
+from qsmile.data.prices import OptionChain, delta_blend_ivols
 from qsmile.data.vols import SmileData
 from qsmile.models.fitting import SmileResult, fit
 from qsmile.models.protocol import SmileModel
@@ -25,5 +25,6 @@ __all__ = [
     "black76_call",
     "black76_implied_vol",
     "black76_put",
+    "delta_blend_ivols",
     "fit",
 ]
