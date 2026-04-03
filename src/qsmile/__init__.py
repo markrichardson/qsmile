@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from qsmile.black76 import black76_call, black76_implied_vol, black76_put
-from qsmile.coords import XCoord, YCoord
-from qsmile.fitting import SmileResult, fit_svi
-from qsmile.metadata import SmileMetadata
-from qsmile.prices import OptionChain
-from qsmile.smile_data import SmileData
-from qsmile.svi import SVIParams, svi_implied_vol, svi_total_variance
+from qsmile.core.black76 import black76_call, black76_implied_vol, black76_put
+from qsmile.core.coords import XCoord, YCoord
+from qsmile.data.metadata import SmileMetadata
+from qsmile.data.prices import OptionChain
+from qsmile.data.smile_data import SmileData
+from qsmile.models.fitting import SmileResult, fit_svi
+from qsmile.models.svi import SVIParams, svi_implied_vol, svi_total_variance
 
 __version__ = "0.8.16"
 

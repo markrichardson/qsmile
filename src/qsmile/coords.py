@@ -1,23 +1,5 @@
-"""Coordinate system enums for smile data."""
+"""Backward-compatible re-export — use ``qsmile.core.coords`` instead."""
 
-from __future__ import annotations
+from qsmile.core.coords import XCoord, YCoord
 
-from enum import Enum
-
-
-class XCoord(Enum):
-    """X-coordinate (strike) representations."""
-
-    FixedStrike = "fixed_strike"
-    MoneynessStrike = "moneyness_strike"
-    LogMoneynessStrike = "log_moneyness_strike"
-    StandardisedStrike = "standardised_strike"
-
-
-class YCoord(Enum):
-    """Y-coordinate (value) representations."""
-
-    Price = "price"
-    Volatility = "volatility"
-    Variance = "variance"
-    TotalVariance = "total_variance"
+__all__ = ["XCoord", "YCoord"]
