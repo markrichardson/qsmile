@@ -1,4 +1,4 @@
-"""SVI smile fitting engine."""
+"""Smile fitting engine."""
 
 from __future__ import annotations
 
@@ -8,121 +8,90 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 from scipy.optimize import least_squares
 
-from qsmile.core.coords import XCoord, YCoord
 from qsmile.data.vols import SmileData
-from qsmile.models.svi import SVIParams, svi_total_variance
+from qsmile.models.protocol import SmileModel
 
 
 @dataclass
 class SmileResult:
-    """Result of an SVI fit.
+    """Result of a smile model fit.
 
     Attributes:
     ----------
-    params : SVIParams
-        Fitted SVI parameters.
+    params : SmileModel
+        Fitted model instance.
     residuals : NDArray[np.float64]
-        Per-observation residuals (model minus observed total variance).
+        Per-observation residuals (model minus observed values in native coordinates).
     rmse : float
         Root mean square error of the fit.
     success : bool
         Whether the optimiser converged.
     """
 
-    params: SVIParams
+    params: SmileModel
     residuals: NDArray[np.float64]
     rmse: float
     success: bool
 
-    def evaluate(self, k: ArrayLike) -> NDArray[np.float64] | np.float64:
-        """Compute SVI total variance at arbitrary log-moneyness values."""
-        return svi_total_variance(k, self.params)
+    def evaluate(self, x: ArrayLike) -> NDArray[np.float64] | np.float64:
+        """Compute model output at arbitrary x values in native coordinates."""
+        return self.params.evaluate(x)
 
 
-def _initial_guess(k: NDArray[np.float64], w: NDArray[np.float64]) -> NDArray[np.float64]:
-    """Compute a heuristic initial guess for SVI parameters from market data."""
-    # a: ATM total variance (closest to k=0)
-    atm_idx = int(np.argmin(np.abs(k)))
-    a0 = float(w[atm_idx])
-
-    # Estimate slope and curvature from a quadratic fit: w ≈ c0 + c1*k + c2*k²
-    if len(k) >= 3:
-        coeffs = np.polyfit(k, w, 2)
-        c2, c1, _c0 = coeffs
-        # b controls wings (curvature), rho controls skew (slope)
-        # From SVI asymptotics: dw/dk|0 ≈ b*rho, d²w/dk²|0 ≈ b/sigma
-        b0 = max(abs(c1) + 2 * abs(c2), 0.01)
-        rho0 = np.clip(c1 / b0, -0.9, 0.9)
-    else:
-        b0 = max(float(np.std(w)) * 2, 0.01)
-        rho0 = 0.0
-
-    m0 = float(k[atm_idx])
-    sigma0 = max(float(np.std(k)) * 0.5, 0.01)
-
-    return np.array([a0, b0, rho0, m0, sigma0])
-
-
-def _residuals(x: NDArray[np.float64], k: NDArray[np.float64], w_obs: NDArray[np.float64]) -> NDArray[np.float64]:
+def _residuals(
+    x: NDArray[np.float64],
+    model: SmileModel,
+    x_obs: NDArray[np.float64],
+    y_obs: NDArray[np.float64],
+) -> NDArray[np.float64]:
     """Residual function for least_squares: model - observed."""
-    params = SVIParams(a=x[0], b=x[1], rho=x[2], m=x[3], sigma=x[4])
-    w_model = svi_total_variance(k, params)
-    return w_model - w_obs
+    fitted = model.from_array(x)
+    y_model = np.asarray(fitted.evaluate(x_obs), dtype=np.float64)
+    return y_model - y_obs
 
 
-def fit_svi(chain: SmileData, initial_params: SVIParams | None = None) -> SmileResult:
-    """Fit SVI raw parameters to option chain data.
+def fit(
+    chain: SmileData,
+    model: SmileModel,
+    initial_params: SmileModel | None = None,
+) -> SmileResult:
+    """Fit a smile model to market data.
 
     Parameters
     ----------
     chain : SmileData
         Market data to fit. Uses mid values for fitting.
-        Internally transforms to (LogMoneynessStrike, TotalVariance).
-    initial_params : SVIParams, optional
-        Initial parameter guess. If None, a heuristic guess is computed.
+        Internally transforms to the model's native coordinates.
+    model : SmileModel
+        A model instance that defines native coordinates, bounds,
+        evaluation, and initial-guess heuristic.
+    initial_params : SmileModel, optional
+        Initial parameter guess (must be same model type).
+        If None, the model's heuristic initial guess is computed.
 
     Returns:
     -------
     SmileResult
         Fitted parameters, residuals, RMSE, and convergence status.
     """
-    sd = chain.transform(XCoord.LogMoneynessStrike, YCoord.TotalVariance)
-    k = sd.x
-    w_obs = sd.y_mid
+    sd = chain.transform(model.native_x_coord, model.native_y_coord)
+    x_obs = sd.x
+    y_obs = sd.y_mid
 
-    if initial_params is not None:
-        x0 = np.array(
-            [
-                initial_params.a,
-                initial_params.b,
-                initial_params.rho,
-                initial_params.m,
-                initial_params.sigma,
-            ]
-        )
-    else:
-        x0 = _initial_guess(k, w_obs)
+    x0 = initial_params.to_array() if initial_params is not None else model.initial_guess(x_obs, y_obs)
 
-    # Box constraints: a unbounded, b >= 0, -1 < rho < 1, m unbounded, sigma > 0
-    lower = [-np.inf, 0.0, -0.999, -np.inf, 1e-8]
-    upper = [np.inf, np.inf, 0.999, np.inf, np.inf]
+    lower, upper = model.bounds
 
     result = least_squares(
         _residuals,
         x0,
-        args=(k, w_obs),
+        args=(model, x_obs, y_obs),
         bounds=(lower, upper),
         method="trf",
         max_nfev=10_000,
     )
 
-    fitted_params = SVIParams(
-        a=float(result.x[0]),
-        b=float(result.x[1]),
-        rho=float(result.x[2]),
-        m=float(result.x[3]),
-        sigma=float(result.x[4]),
-    )
+    fitted_params = model.from_array(result.x)
     residuals = result.fun
     rmse = float(np.sqrt(np.mean(residuals**2)))
 

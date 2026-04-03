@@ -31,10 +31,10 @@ with app.setup:
 
     from qsmile import (
         OptionChain,
+        SVIParams,
         XCoord,
         YCoord,
-        fit_svi,
-        svi_implied_vol,
+        fit,
     )
 
 
@@ -53,13 +53,13 @@ def cell_intro():
         2. **`SmileData`** — unified coordinate-labelled container with
            `.transform(x, y)` to freely move between strike/moneyness/log-moneyness/standardised
            X-coordinates and price/vol/variance/total-variance Y-coordinates
-        3. **`fit_svi`** — SVI parametric smile fit
+        3. **`fit`** — SVI parametric smile fit
 
         $$
         \text{Prices} \xrightarrow{\texttt{to\_smile\_data()}} \text{SmileData}
         \xrightarrow{\texttt{transform()}} \text{any coords}
         \quad\big|\quad
-        \text{SmileData} \xrightarrow{\texttt{fit\_svi()}} \text{SVI}
+        \text{SmileData} \xrightarrow{\texttt{fit()}} \text{SVI}
         $$
         """
     )
@@ -366,7 +366,7 @@ def cell_svi_intro():
         r"""
         ## Stage 3 — SVI Fit
 
-        We pass the `SmileData` (in volatility coordinates) directly to `fit_svi`,
+        We pass the `SmileData` (in volatility coordinates) directly to `fit`,
         which transforms to log-moneyness / total-variance internally.
         The fitted SVI curve is overlaid on the market data.
         """
@@ -377,7 +377,8 @@ def cell_svi_intro():
 @app.cell
 def cell_svi_fit(sd):
     """Fit SVI directly from SmileData."""
-    result = fit_svi(sd)
+    _svi = SVIParams(a=0.0, b=0.01, rho=0.0, m=0.0, sigma=0.1)
+    result = fit(sd, _svi)
     p = result.params
     return p, result
 
@@ -412,7 +413,7 @@ def cell_svi_plot(expiry, result, sd):
     _fwd = sd.metadata.forward
     _strikes_fine = np.linspace(sd.x.min() * 0.95, sd.x.max() * 1.05, 200)
     _k_fine = np.log(_strikes_fine / _fwd)
-    _iv_fitted = svi_implied_vol(_k_fine, result.params, expiry)
+    _iv_fitted = result.params.implied_vol(_k_fine, expiry)
 
     _fig = go.Figure()
     _fig.add_trace(
@@ -471,7 +472,7 @@ def cell_summary():
         |------|-------|--------|
         | Raw prices with bid/ask | `OptionChain` | *constructor* — auto-calibrates F, D |
         | → Any coordinate system | `SmileData` | `.to_smile_data().transform(x, y)` |
-        | → SVI smile fit | `SmileResult` | `fit_svi(sd)` |
+        | → SVI smile fit | `SmileResult` | `fit(sd, model)` |
 
         The **coordinate transform framework** lets you freely move between
         any combination of X-coordinates (Strike, Moneyness, Log-Moneyness,

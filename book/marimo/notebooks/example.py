@@ -29,7 +29,7 @@ with app.setup:
     import pandas as pd
     import plotly.graph_objects as go
 
-    from qsmile import SVIParams, fit_svi, svi_implied_vol
+    from qsmile import SVIParams, fit
     from qsmile.core.coords import XCoord, YCoord
     from qsmile.data.prices import OptionChain
 
@@ -141,7 +141,7 @@ def cell_08():
         ## SVI Fitting
 
         We fit the SVI raw parameterisation to the market data using
-        `fit_svi`, which minimises the sum of squared residuals in
+        `fit`, which minimises the sum of squared residuals in
         total-variance space via `scipy.optimize.least_squares`.
         """
     )
@@ -151,7 +151,8 @@ def cell_08():
 @app.cell(hide_code=True)
 def cell_09(sd):
     """Fit SVI to the SmileData and display results."""
-    result = fit_svi(sd)
+    _svi = SVIParams(a=0.0, b=0.01, rho=0.0, m=0.0, sigma=0.1)
+    result = fit(sd, _svi)
     p = result.params
 
     mo.vstack(
@@ -181,7 +182,7 @@ def cell_10(expiry, result, sd):
     _sd_lm = sd.transform(XCoord.LogMoneynessStrike, YCoord.Volatility)
     _k_market = _sd_lm.x
     k_fine = np.linspace(_k_market.min() - 0.05, _k_market.max() + 0.05, 200)
-    iv_fitted = svi_implied_vol(k_fine, result.params, expiry)
+    iv_fitted = result.params.implied_vol(k_fine, expiry)
 
     fig = go.Figure()
     fig.add_trace(
@@ -309,7 +310,7 @@ def cell_14(p):
 def cell_15(expiry, iv_fitted, k_fine, sl_a, sl_b, sl_m, sl_rho, sl_sigma):
     """Plot fitted vs explorer smile side by side."""
     explorer_params = SVIParams(a=sl_a.value, b=sl_b.value, rho=sl_rho.value, m=sl_m.value, sigma=sl_sigma.value)
-    iv_explorer = svi_implied_vol(k_fine, explorer_params, expiry)
+    iv_explorer = explorer_params.implied_vol(k_fine, expiry)
 
     fig_explore = go.Figure()
     fig_explore.add_trace(
@@ -412,9 +413,9 @@ def cell_23():
         This notebook demonstrated the core **qsmile** SVI fitting workflow:
 
         - **`SmileData.from_mid_vols`** — construct a validated smile container from mid IVs
-        - **`fit_svi`** — least-squares calibration of the SVI raw parameterisation
+        - **`fit`** — generic least-squares calibration of any `SmileModel`
         - **`SmileResult`** — fitted parameters, residuals, RMSE, and `evaluate(k)`
-        - **`svi_total_variance` / `svi_implied_vol`** — direct model evaluation
+        - **`SVIParams.evaluate` / `SVIParams.implied_vol`** — direct model evaluation
 
         ### Full Option Chain Pipeline
 
@@ -425,7 +426,7 @@ def cell_23():
         2. `SmileData` — unified container with **coordinate transforms** between
            any combination of X-coords (Strike, Moneyness, Log-Moneyness, Standardised)
            and Y-coords (Price, Volatility, Variance, Total Variance)
-        3. `fit_svi(sd)` — SVI fit directly from a `SmileData`
+        3. `fit(sd, model)` — SVI fit directly from a `SmileData`
 
         **Next steps** — future versions will add SVI-JW parameterisation,
         multi-expiry surface fitting, and arbitrage-free enforcement.
