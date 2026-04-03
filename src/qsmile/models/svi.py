@@ -14,6 +14,12 @@ from qsmile.core.coords import XCoord, YCoord
 class SVIParams:
     """Raw SVI parameters.
 
+    The SVI raw parameterisation models total implied variance as:
+
+        w(k) = a + b * (rho * (k - m) + sqrt((k - m)^2 + sigma^2))
+
+    where k = ln(K/F) is log-moneyness.
+
     Parameters
     ----------
     a : float
@@ -84,8 +90,31 @@ class SVIParams:
         )
 
     def evaluate(self, x: ArrayLike) -> NDArray[np.float64] | np.float64:
-        """Compute SVI total variance at the given log-moneyness values."""
-        return svi_total_variance(x, self)
+        """Compute SVI total variance at the given log-moneyness values.
+
+        w(k) = a + b * (rho * (k - m) + sqrt((k - m)^2 + sigma^2))
+        """
+        k = np.asarray(x, dtype=np.float64)
+        d = k - self.m
+        return self.a + self.b * (self.rho * d + np.sqrt(d**2 + self.sigma**2))
+
+    def implied_vol(self, k: ArrayLike, expiry: float) -> NDArray[np.float64] | np.float64:
+        """Compute SVI implied volatility from total variance.
+
+        sigma_IV = sqrt(w(k) / T)
+
+        Parameters
+        ----------
+        k : ArrayLike
+            Log-moneyness values.
+        expiry : float
+            Time to expiration in years. Must be positive.
+        """
+        if expiry <= 0:
+            msg = f"expiry must be positive, got {expiry}"
+            raise ValueError(msg)
+        w = self.evaluate(k)
+        return np.sqrt(w / expiry)
 
     @staticmethod
     def initial_guess(x: NDArray[np.float64], y: NDArray[np.float64]) -> NDArray[np.float64]:
@@ -116,56 +145,3 @@ class SVIParams:
         sigma0 = max(float(np.std(x)) * 0.5, 0.01)
 
         return np.array([a0, b0, rho0, m0, sigma0])
-
-
-def svi_total_variance(
-    k: ArrayLike,
-    params: SVIParams,
-) -> NDArray[np.float64] | np.float64:
-    """Compute SVI total implied variance.
-
-    w(k) = a + b * (rho * (k - m) + sqrt((k - m)^2 + sigma^2))
-
-    Parameters
-    ----------
-    k : ArrayLike
-        Log-moneyness values.
-    params : SVIParams
-        Raw SVI parameters.
-
-    Returns:
-    -------
-    Total implied variance at each k.
-    """
-    k = np.asarray(k, dtype=np.float64)
-    d = k - params.m
-    return params.a + params.b * (params.rho * d + np.sqrt(d**2 + params.sigma**2))
-
-
-def svi_implied_vol(
-    k: ArrayLike,
-    params: SVIParams,
-    expiry: float,
-) -> NDArray[np.float64] | np.float64:
-    """Compute SVI implied volatility from total variance.
-
-    sigma_IV = sqrt(w(k) / T)
-
-    Parameters
-    ----------
-    k : ArrayLike
-        Log-moneyness values.
-    params : SVIParams
-        Raw SVI parameters.
-    expiry : float
-        Time to expiration in years. Must be positive.
-
-    Returns:
-    -------
-    Implied volatility at each k.
-    """
-    if expiry <= 0:
-        msg = f"expiry must be positive, got {expiry}"
-        raise ValueError(msg)
-    w = svi_total_variance(k, params)
-    return np.sqrt(w / expiry)

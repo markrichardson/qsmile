@@ -10,7 +10,6 @@ from scipy.optimize import least_squares
 
 from qsmile.data.vols import SmileData
 from qsmile.models.protocol import SmileModel
-from qsmile.models.svi import SVIParams
 
 
 @dataclass
@@ -102,31 +101,3 @@ def fit(
         rmse=rmse,
         success=bool(result.success),
     )
-
-
-def fit_svi(chain: SmileData, initial_params: SVIParams | None = None) -> SmileResult:
-    """Fit SVI raw parameters to option chain data.
-
-    Convenience wrapper around ``fit()`` with an SVI model.
-
-    Parameters
-    ----------
-    chain : SmileData
-        Market data to fit. Uses mid values for fitting.
-        Internally transforms to (LogMoneynessStrike, TotalVariance).
-    initial_params : SVIParams, optional
-        Initial parameter guess. If None, a heuristic guess is computed.
-
-    Returns:
-    -------
-    SmileResult
-        Fitted parameters, residuals, RMSE, and convergence status.
-    """
-    # Use initial_params as both the model template and the starting point,
-    # or create a default SVI model for the fit.
-    if initial_params is not None:
-        return fit(chain, initial_params, initial_params)
-    # Need a valid SVIParams to serve as the model; params don't matter since
-    # initial_guess will be used.
-    model = SVIParams(a=0.0, b=0.01, rho=0.0, m=0.0, sigma=0.1)
-    return fit(chain, model)

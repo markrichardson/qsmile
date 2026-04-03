@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from qsmile.models.fitting import SmileResult, fit_svi
-from qsmile.models.svi import SVIParams, svi_implied_vol, svi_total_variance
+from qsmile.models.fitting import SmileResult, fit
+from qsmile.models.protocol import SmileModel
+from qsmile.models.svi import SVIParams
 
 __all__ = [
     "SVIParams",
+    "SmileModel",
     "SmileResult",
-    "fit_svi",
-    "svi_implied_vol",
-    "svi_total_variance",
+    "fit",
 ]

@@ -5,9 +5,12 @@ from __future__ import annotations
 import numpy as np
 
 from qsmile.data.vols import SmileData
-from qsmile.models.fitting import SmileResult, fit, fit_svi
+from qsmile.models.fitting import SmileResult, fit
 from qsmile.models.protocol import SmileModel
-from qsmile.models.svi import SVIParams, svi_implied_vol, svi_total_variance
+from qsmile.models.svi import SVIParams
+
+# Default SVI model instance for generic fit calls
+_SVI = SVIParams(a=0.0, b=0.01, rho=0.0, m=0.0, sigma=0.1)
 
 
 class TestFitSVISyntheticRoundTrip:
@@ -19,10 +22,10 @@ class TestFitSVISyntheticRoundTrip:
         strikes = np.linspace(80, 120, 20)
         forward = 100.0
         k = np.log(strikes / forward)
-        ivs = svi_implied_vol(k, true_params, expiry)
+        ivs = true_params.implied_vol(k, expiry)
 
         sd = SmileData.from_mid_vols(strikes=strikes, ivs=ivs, forward=forward, expiry=expiry)
-        result = fit_svi(sd)
+        result = fit(sd, _SVI)
 
         assert result.success
         assert result.rmse < 1e-10
@@ -42,14 +45,14 @@ class TestFitSVINoisyData:
         strikes = np.linspace(80, 120, 15)
         forward = 100.0
         k = np.log(strikes / forward)
-        ivs_clean = svi_implied_vol(k, true_params, expiry)
+        ivs_clean = true_params.implied_vol(k, expiry)
 
         rng = np.random.default_rng(42)
         noise = rng.normal(0, 0.002, size=ivs_clean.shape)
         ivs_noisy = ivs_clean + noise
 
         sd = SmileData.from_mid_vols(strikes=strikes, ivs=ivs_noisy, forward=forward, expiry=expiry)
-        result = fit_svi(sd)
+        result = fit(sd, _SVI)
 
         assert result.success
         assert result.rmse < 0.01
@@ -64,11 +67,11 @@ class TestFitSVICustomInitialGuess:
         strikes = np.linspace(85, 115, 12)
         forward = 100.0
         k = np.log(strikes / forward)
-        ivs = svi_implied_vol(k, true_params, expiry)
+        ivs = true_params.implied_vol(k, expiry)
 
         sd = SmileData.from_mid_vols(strikes=strikes, ivs=ivs, forward=forward, expiry=expiry)
         guess = SVIParams(a=0.03, b=0.08, rho=-0.2, m=0.01, sigma=0.15)
-        result = fit_svi(sd, initial_params=guess)
+        result = fit(sd, guess, initial_params=guess)
 
         assert result.success
         assert result.rmse < 1e-6
@@ -81,10 +84,10 @@ class TestSmileResult:
         strikes = np.linspace(85, 115, 10)
         forward = 100.0
         k = np.log(strikes / forward)
-        ivs = svi_implied_vol(k, true_params, expiry)
+        ivs = true_params.implied_vol(k, expiry)
 
         sd = SmileData.from_mid_vols(strikes=strikes, ivs=ivs, forward=forward, expiry=expiry)
-        result = fit_svi(sd)
+        result = fit(sd, _SVI)
 
         assert result.residuals.shape == (10,)
         assert isinstance(result.rmse, float)
@@ -100,7 +103,7 @@ class TestSmileResult:
         )
         k_test = np.array([-0.2, 0.0, 0.2])
         w = result.evaluate(k_test)
-        expected = svi_total_variance(k_test, params)
+        expected = params.evaluate(k_test)
         np.testing.assert_allclose(w, expected)
 
     def test_fitted_params_within_bounds(self):
@@ -109,10 +112,10 @@ class TestSmileResult:
         strikes = np.linspace(80, 120, 20)
         forward = 100.0
         k = np.log(strikes / forward)
-        ivs = svi_implied_vol(k, true_params, expiry)
+        ivs = true_params.implied_vol(k, expiry)
 
         sd = SmileData.from_mid_vols(strikes=strikes, ivs=ivs, forward=forward, expiry=expiry)
-        result = fit_svi(sd)
+        result = fit(sd, _SVI)
 
         assert result.params.b >= 0
         assert -1 < result.params.rho < 1
@@ -120,7 +123,7 @@ class TestSmileResult:
 
 
 class TestFitSVIFromSmileData:
-    """fit_svi should accept SmileData in various coordinate systems."""
+    """fit should accept SmileData in various coordinate systems."""
 
     def test_smile_data_from_mid_vols(self):
         true_params = SVIParams(a=0.04, b=0.1, rho=-0.3, m=0.0, sigma=0.2)
@@ -128,11 +131,11 @@ class TestFitSVIFromSmileData:
         strikes = np.linspace(80, 120, 20)
         forward = 100.0
         k = np.log(strikes / forward)
-        ivs = svi_implied_vol(k, true_params, expiry)
+        ivs = true_params.implied_vol(k, expiry)
 
         # Fit via SmileData.from_mid_vols
         sd = SmileData.from_mid_vols(strikes=strikes, ivs=ivs, forward=forward, expiry=expiry)
-        result = fit_svi(sd)
+        result = fit(sd, _SVI)
 
         assert result.success
         np.testing.assert_allclose(result.params.a, true_params.a, atol=1e-6)
@@ -166,10 +169,12 @@ class TestSVIParamsProtocolConformance:
         assert p.native_x_coord == XCoord.LogMoneynessStrike
         assert p.native_y_coord == YCoord.TotalVariance
 
-    def test_evaluate_matches_svi_total_variance(self):
+    def test_evaluate(self):
         p = SVIParams(a=0.04, b=0.1, rho=-0.3, m=0.0, sigma=0.2)
         k = np.array([-0.2, 0.0, 0.2])
-        np.testing.assert_allclose(p.evaluate(k), svi_total_variance(k, p))
+        d = k - p.m
+        expected = p.a + p.b * (p.rho * d + np.sqrt(d**2 + p.sigma**2))
+        np.testing.assert_allclose(p.evaluate(k), expected)
 
     def test_initial_guess_length(self):
         k = np.linspace(-0.2, 0.2, 10)
@@ -187,11 +192,10 @@ class TestGenericFit:
         strikes = np.linspace(80, 120, 20)
         forward = 100.0
         k = np.log(strikes / forward)
-        ivs = svi_implied_vol(k, true_params, expiry)
+        ivs = true_params.implied_vol(k, expiry)
 
         sd = SmileData.from_mid_vols(strikes=strikes, ivs=ivs, forward=forward, expiry=expiry)
-        model = SVIParams(a=0.0, b=0.01, rho=0.0, m=0.0, sigma=0.1)
-        result = fit(sd, model)
+        result = fit(sd, _SVI)
 
         assert result.success
         assert result.rmse < 1e-10
@@ -203,12 +207,11 @@ class TestGenericFit:
         strikes = np.linspace(80, 120, 20)
         forward = 100.0
         k = np.log(strikes / forward)
-        ivs = svi_implied_vol(k, true_params, expiry)
+        ivs = true_params.implied_vol(k, expiry)
 
         # SmileData in (FixedStrike, Volatility) — non-native for SVI
         sd = SmileData.from_mid_vols(strikes=strikes, ivs=ivs, forward=forward, expiry=expiry)
-        model = SVIParams(a=0.0, b=0.01, rho=0.0, m=0.0, sigma=0.1)
-        result = fit(sd, model)
+        result = fit(sd, _SVI)
 
         assert result.success
         assert result.rmse < 1e-10
@@ -219,7 +222,7 @@ class TestGenericFit:
         strikes = np.linspace(85, 115, 12)
         forward = 100.0
         k = np.log(strikes / forward)
-        ivs = svi_implied_vol(k, true_params, expiry)
+        ivs = true_params.implied_vol(k, expiry)
 
         sd = SmileData.from_mid_vols(strikes=strikes, ivs=ivs, forward=forward, expiry=expiry)
         guess = SVIParams(a=0.03, b=0.08, rho=-0.2, m=0.01, sigma=0.15)
@@ -234,11 +237,10 @@ class TestGenericFit:
         strikes = np.linspace(80, 120, 20)
         forward = 100.0
         k = np.log(strikes / forward)
-        ivs = svi_implied_vol(k, true_params, expiry)
+        ivs = true_params.implied_vol(k, expiry)
 
         sd = SmileData.from_mid_vols(strikes=strikes, ivs=ivs, forward=forward, expiry=expiry)
-        model = SVIParams(a=0.0, b=0.01, rho=0.0, m=0.0, sigma=0.1)
-        result = fit(sd, model)
+        result = fit(sd, _SVI)
 
         assert result.params.b >= 0
         assert -1 < result.params.rho < 1

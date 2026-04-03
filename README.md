@@ -67,7 +67,7 @@ make install
 
 ```python +RHIZA_SKIP
 import numpy as np
-from qsmile import OptionChain, SmileData, XCoord, YCoord, fit_svi
+from qsmile import OptionChain, SmileData, SVIParams, XCoord, YCoord, fit
 
 # Bid/ask prices — forward and DF are calibrated automatically
 prices = OptionChain(
@@ -87,7 +87,7 @@ sd_vols = sd.transform(XCoord.FixedStrike, YCoord.Volatility)    # → implied v
 sd_unit = sd_vols.transform(XCoord.StandardisedStrike, YCoord.TotalVariance)  # → unitised
 
 # Fit SVI directly from SmileData
-result = fit_svi(sd_vols)
+result = fit(sd_vols, SVIParams(a=0.0, b=0.01, rho=0.0, m=0.0, sigma=0.1))
 print(result.params)   # Fitted SVIParams
 print(result.rmse)     # Root mean square error
 ```
@@ -96,7 +96,7 @@ print(result.rmse)     # Root mean square error
 
 ```python +RHIZA_SKIP
 import numpy as np
-from qsmile import SmileData, fit_svi
+from qsmile import SmileData, SVIParams, fit
 
 sd = SmileData.from_mid_vols(
     strikes=np.array([80, 90, 100, 110, 120], dtype=float),
@@ -105,7 +105,7 @@ sd = SmileData.from_mid_vols(
     expiry=0.5,
 )
 
-result = fit_svi(sd)
+result = fit(sd, SVIParams(a=0.0, b=0.01, rho=0.0, m=0.0, sigma=0.1))
 print(result.params)   # Fitted SVIParams
 print(result.rmse)     # Root mean square error
 ```
@@ -138,12 +138,9 @@ SmileData.from_mid_vols(...)            ──→ SmileData ──────�
 | Function / Class | Description |
 |---|---|
 | `fit(chain, model)` | Fit any `SmileModel` to `SmileData` — generic entry point |
-| `fit_svi(chain)` | Convenience wrapper: fit SVI params from `SmileData` |
 | `SmileModel` | Protocol for pluggable smile models (native coords, bounds, evaluate, etc.) |
 | `SmileResult` | Fitted result with `.params`, `.residuals`, `.rmse`, `.success`, `.evaluate(x)` |
-| `SVIParams` | SVI parameters `(a, b, rho, m, sigma)` — conforms to `SmileModel` |
-| `svi_total_variance(k, params)` | Evaluate SVI total variance at log-moneyness `k` |
-| `svi_implied_vol(k, params, expiry)` | Evaluate SVI implied vol at log-moneyness `k` |
+| `SVIParams` | SVI parameters `(a, b, rho, m, sigma)` — conforms to `SmileModel`, includes `.evaluate(k)` and `.implied_vol(k, T)` |
 
 ### Black76 pricing
 
