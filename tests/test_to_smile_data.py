@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import numpy as np
 
-from qsmile.black76 import black76_call
-from qsmile.coords import XCoord, YCoord
-from qsmile.prices import OptionChain
+from qsmile.core.black76 import black76_call
+from qsmile.core.coords import XCoord, YCoord
+from qsmile.data.prices import OptionChain
 
 
 class TestOptionChainToSmileData:

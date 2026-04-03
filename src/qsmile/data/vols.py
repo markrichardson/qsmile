@@ -11,14 +11,14 @@ from numpy.typing import NDArray
 if TYPE_CHECKING:
     import matplotlib.figure
 
-from qsmile.coords import XCoord, YCoord
-from qsmile.maps import (
+from qsmile.core.coords import XCoord, YCoord
+from qsmile.core.maps import (
     apply_x_chain,
     apply_y_chain,
     compose_x_maps,
     compose_y_maps,
 )
-from qsmile.metadata import SmileMetadata
+from qsmile.data.meta import SmileMetadata
 
 
 @dataclass
@@ -171,7 +171,7 @@ class SmileData:
 
         Axis labels are derived from coordinate names.
         """
-        from qsmile.plot import plot_bid_ask
+        from qsmile.core.plot import plot_bid_ask
 
         return plot_bid_ask(
             self.x,

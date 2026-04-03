@@ -5,9 +5,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from qsmile.black76 import black76_call, black76_put
-from qsmile.coords import XCoord, YCoord
-from qsmile.prices import OptionChain, _calibrate_forward_df
+from qsmile.core.black76 import black76_call, black76_put
+from qsmile.core.coords import XCoord, YCoord
+from qsmile.data.prices import OptionChain, _calibrate_forward_df
 
 
 def _make_prices(

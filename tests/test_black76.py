@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from qsmile.black76 import black76_call, black76_implied_vol, black76_put
+from qsmile.core.black76 import black76_call, black76_implied_vol, black76_put
 
 
 class TestBlack76Call:

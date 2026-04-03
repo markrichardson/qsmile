@@ -12,7 +12,7 @@ from numpy.typing import NDArray
 if TYPE_CHECKING:
     import matplotlib.figure
 
-    from qsmile.smile_data import SmileData
+    from qsmile.data.vols import SmileData
 
 
 def _calibrate_forward_df(
@@ -182,9 +182,9 @@ class OptionChain:
 
         Uses call mid-market prices as the Y-values.
         """
-        from qsmile.coords import XCoord, YCoord
-        from qsmile.metadata import SmileMetadata
-        from qsmile.smile_data import SmileData
+        from qsmile.core.coords import XCoord, YCoord
+        from qsmile.data.meta import SmileMetadata
+        from qsmile.data.vols import SmileData
 
         assert self.forward is not None  # noqa: S101
         assert self.discount_factor is not None  # noqa: S101
@@ -319,7 +319,7 @@ class OptionChain:
 
     def plot(self, *, title: str = "Option Chain Prices") -> matplotlib.figure.Figure:
         """Plot bid/ask prices as error bars for calls and puts."""
-        from qsmile.plot import _require_matplotlib, plot_bid_ask
+        from qsmile.core.plot import _require_matplotlib, plot_bid_ask
 
         _require_matplotlib()
         import matplotlib.pyplot as plt

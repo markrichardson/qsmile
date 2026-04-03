@@ -30,8 +30,8 @@ with app.setup:
     import plotly.graph_objects as go
 
     from qsmile import SVIParams, fit_svi, svi_implied_vol
-    from qsmile.coords import XCoord, YCoord
-    from qsmile.prices import OptionChain
+    from qsmile.core.coords import XCoord, YCoord
+    from qsmile.data.prices import OptionChain
 
 
 @app.cell(hide_code=True)
