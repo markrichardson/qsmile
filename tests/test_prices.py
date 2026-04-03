@@ -174,3 +174,111 @@ class TestToSmileDataPriceToVol:
         np.testing.assert_allclose(sd_vols.y_mid, 0.25, atol=0.002)
         # Spread should be preserved
         assert np.all(sd_vols.y_ask >= sd_vols.y_bid)
+
+
+class TestDenoise:
+    """Tests for OptionChainPrices.denoise()."""
+
+    def test_clean_data_unchanged(self):
+        """Denoise on clean synthetic data should keep all strikes."""
+        data = _make_prices()
+        chain = OptionChainPrices(**data)
+        clean = chain.denoise()
+        assert len(clean.strikes) == len(chain.strikes)
+        np.testing.assert_array_equal(clean.strikes, chain.strikes)
+
+    def test_returns_new_instance(self):
+        """Denoise must return a new OptionChainPrices, not mutate in place."""
+        data = _make_prices()
+        chain = OptionChainPrices(**data)
+        clean = chain.denoise()
+        assert clean is not chain
+
+    def test_removes_zero_bid_call(self):
+        """Strikes where call bid is zero should be removed."""
+        data = _make_prices()
+        data["call_bid"][0] = 0.0
+        data["call_ask"][0] = data["call_bid"][0] + 0.01
+        chain = OptionChainPrices(**data)
+        clean = chain.denoise()
+        assert data["strikes"][0] not in clean.strikes
+
+    def test_removes_zero_bid_put(self):
+        """Strikes where put bid is zero should be removed."""
+        data = _make_prices()
+        data["put_bid"][-1] = 0.0
+        chain = OptionChainPrices(**data)
+        clean = chain.denoise()
+        assert data["strikes"][-1] not in clean.strikes
+
+    def test_removes_parity_violation(self):
+        """Strikes where put-call parity is non-monotone should be removed."""
+        data = _make_prices()
+        OptionChainPrices(**data)
+        # Inflate a call mid in the middle to break parity monotonicity
+        bad_idx = 3
+        data2 = {k: v.copy() if isinstance(v, np.ndarray) else v for k, v in data.items()}
+        data2["call_bid"][bad_idx] += 50.0
+        data2["call_ask"][bad_idx] += 50.0
+        chain2 = OptionChainPrices(**data2)
+        clean2 = chain2.denoise()
+        assert data["strikes"][bad_idx] not in clean2.strikes
+
+    def test_removes_non_monotone_call(self):
+        """Strikes where call mid increases should be removed."""
+        data = _make_prices()
+        # Make call price at index 4 higher than at index 3
+        data["call_bid"][4] = data["call_bid"][3] + 5.0
+        data["call_ask"][4] = data["call_ask"][3] + 5.0
+        chain = OptionChainPrices(**data)
+        clean = chain.denoise()
+        assert data["strikes"][4] not in clean.strikes
+
+    def test_monotonicity_after_denoise(self):
+        """After denoise, all monotonicity properties must hold."""
+        data = _make_prices()
+        # Inject multiple kinds of noise
+        data["call_bid"][1] += 20.0
+        data["call_ask"][1] += 20.0
+        data["put_bid"][-2] += 20.0
+        data["put_ask"][-2] += 20.0
+        chain = OptionChainPrices(**data)
+        clean = chain.denoise()
+        parity = clean.call_mid - clean.put_mid
+        assert np.all(np.diff(parity) <= 0), "parity not monotone"
+        assert np.all(np.diff(clean.call_mid) <= 0), "call mid not monotone"
+        assert np.all(np.diff(clean.put_mid) >= 0), "put mid not monotone"
+
+    def test_recalibrates_forward(self):
+        """The returned chain should have a freshly calibrated forward."""
+        data = _make_prices()
+        chain = OptionChainPrices(**data)
+        clean = chain.denoise()
+        # Forward should still be approximately correct
+        assert clean.forward == pytest.approx(data["forward"], rel=1e-2)
+
+    def test_at_least_three_strikes_remain(self):
+        """Denoise on a chain that's too noisy should still produce ≥3 strikes."""
+        data = _make_prices()
+        chain = OptionChainPrices(**data)
+        clean = chain.denoise()
+        assert len(clean.strikes) >= 3
+
+    def test_removes_parity_residual_outlier(self):
+        """Strike whose C-P deviates far from D*(F-K) should be removed.
+
+        This catches stale deep-ITM quotes whose bid-ask spread is tight
+        but whose mid is biased (e.g. the K=4000 SPX pattern).
+        """
+        data = _make_prices()
+        OptionChainPrices(**data)
+        # Inflate the lowest-strike call price so C-P >> D*(F-K) at that strike,
+        # but keep the spread tight so the ratio is large.
+        bad_idx = 0
+        data2 = {k: v.copy() if isinstance(v, np.ndarray) else v for k, v in data.items()}
+        # Add a large bias to both bid and ask (keeps spread unchanged)
+        data2["call_bid"][bad_idx] += 10.0
+        data2["call_ask"][bad_idx] += 10.0
+        chain2 = OptionChainPrices(**data2)
+        clean2 = chain2.denoise()
+        assert data["strikes"][bad_idx] not in clean2.strikes

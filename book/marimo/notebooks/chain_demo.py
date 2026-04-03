@@ -5,6 +5,7 @@
 #     "numpy>=1.24.0",
 #     "plotly>=5.18.0",
 #     "pandas>=2.0.0",
+#     "pyarrow>=17.0.0",
 #     "scipy>=1.14.0",
 #     "cvxpy>=1.6.0",
 #     "qsmile[plot]",
@@ -21,6 +22,8 @@ __generated_with = "0.21.1"
 app = marimo.App(width="medium")
 
 with app.setup:
+    from pathlib import Path
+
     import marimo as mo
     import numpy as np
     import pandas as pd
@@ -28,13 +31,11 @@ with app.setup:
 
     from qsmile import (
         OptionChainPrices,
-        SVIParams,
         XCoord,
         YCoord,
         fit_svi,
         svi_implied_vol,
     )
-    from qsmile.black76 import black76_call, black76_put
 
 
 @app.cell(hide_code=True)
@@ -42,11 +43,12 @@ def cell_intro():
     """Render the notebook introduction."""
     mo.md(
         r"""
-        # Option Chain Pipeline — From Prices to Smile Fit
+        # Option Chain Pipeline — Real SPX Data
 
-        This notebook demonstrates the **qsmile** option chain pipeline:
+        This notebook demonstrates the **qsmile** option chain pipeline using
+        **real S&P 500 (SPX) option chain data** loaded from parquet:
 
-        1. **`OptionChainPrices`** — raw bid/ask option prices, with forward & discount
+        1. **`OptionChainPrices`** — real bid/ask option prices, with forward & discount
            factor calibrated automatically from put-call parity
         2. **`SmileData`** — unified coordinate-labelled container with
            `.transform(x, y)` to freely move between strike/moneyness/log-moneyness/standardised
@@ -69,11 +71,11 @@ def cell_market_intro():
     """Introduce the market data section."""
     mo.md(
         r"""
-        ## Stage 0 — Synthetic Market Data
+        ## Stage 0 — Real SPX Market Data
 
-        We generate realistic bid/ask option prices from known SVI parameters
-        so we can verify round-trip accuracy later. Bid/ask spreads widen
-        monotonically for in-the-money options, reflecting real-world liquidity.
+        We load a real S&P 500 (SPX) option chain fetched from Yahoo Finance
+        and saved as parquet. The chain includes bid/ask prices, volume, and
+        open interest for both calls and puts at a ~3-month expiry.
         """
     )
     return
@@ -81,45 +83,25 @@ def cell_market_intro():
 
 @app.cell
 def cell_market_data():
-    """Generate synthetic bid/ask option prices."""
-    # True parameters — we will try to recover these via SVI fit
-    true_params = SVIParams(a=0.008, b=0.08, rho=-0.6, m=-0.02, sigma=0.10)
-    forward = 100.0
-    expiry = 0.5
-    discount_factor = 0.98
+    """Load real SPX option chain from parquet."""
+    _root = Path(__file__).resolve().parent.parent.parent.parent
+    _pq = sorted(_root.glob("parquet/chains/*.parquet"))[-1]
+    df_raw = pd.read_parquet(_pq)
 
-    strikes = np.array([80, 85, 90, 95, 97.5, 100, 102.5, 105, 110, 115, 120], dtype=np.float64)
-    k = np.log(strikes / forward)
-    ivs_mid = svi_implied_vol(k, true_params, expiry)
+    expiry = float(df_raw["daysToExpiry"].iloc[0]) / 365.0
 
-    # Generate clean mid prices via Black76
-    call_mid = black76_call(forward, strikes, discount_factor, ivs_mid, expiry)
-    put_mid = black76_put(forward, strikes, discount_factor, ivs_mid, expiry)
+    # Pivot calls/puts onto common strikes
+    _cols = ["strike", "bid", "ask", "volume", "openInterest"]
+    calls = df_raw[df_raw["optionType"] == "call"][_cols].set_index("strike")
+    puts = df_raw[df_raw["optionType"] == "put"][_cols].set_index("strike")
+    merged = calls.join(puts, lsuffix="_call", rsuffix="_put", how="inner").sort_index()
 
-    # Add a realistic spread: ITM options are wider (harder to hedge)
-    # Calls are ITM for K < F, puts are ITM for K > F
-    call_itm = np.maximum(forward - strikes, 0.0) / forward  # deeper ITM → larger
-    put_itm = np.maximum(strikes - forward, 0.0) / forward
-    call_spread_pct = 0.02 + 0.08 * call_itm  # 2% base, up to ~10% deep ITM
-    put_spread_pct = 0.02 + 0.08 * put_itm
-    call_spread = np.maximum(call_mid * call_spread_pct, 0.01)
-    put_spread = np.maximum(put_mid * put_spread_pct, 0.01)
-
-    call_bid = np.maximum(call_mid - call_spread / 2, 0.0)
-    call_ask = call_mid + call_spread / 2
-    put_bid = np.maximum(put_mid - put_spread / 2, 0.0)
-    put_ask = put_mid + put_spread / 2
-    return (
-        call_ask,
-        call_bid,
-        discount_factor,
-        expiry,
-        forward,
-        put_ask,
-        put_bid,
-        strikes,
-        true_params,
-    )
+    strikes = merged.index.values.astype(np.float64)
+    call_bid = merged["bid_call"].values.astype(np.float64)
+    call_ask = merged["ask_call"].values.astype(np.float64)
+    put_bid = merged["bid_put"].values.astype(np.float64)
+    put_ask = merged["ask_put"].values.astype(np.float64)
+    return call_ask, call_bid, expiry, put_ask, put_bid, strikes
 
 
 @app.cell(hide_code=True)
@@ -129,10 +111,9 @@ def cell_prices_intro():
         r"""
         ## Stage 1 — `OptionChainPrices`
 
-        Construct an `OptionChainPrices` from raw bid/ask prices. The forward
-        and discount factor are **calibrated from put-call parity** using
-        quasi-delta weighted least squares (we intentionally omit them to show
-        the calibration in action).
+        Construct an `OptionChainPrices` from the real SPX bid/ask prices.
+        The forward and discount factor are **calibrated from put-call parity**
+        using quasi-delta weighted least squares.
         """
     )
     return
@@ -141,7 +122,7 @@ def cell_prices_intro():
 @app.cell
 def cell_prices(call_ask, call_bid, expiry, put_ask, put_bid, strikes):
     """Build OptionChainPrices — forward/DF calibrated automatically."""
-    prices = OptionChainPrices(
+    raw_prices = OptionChainPrices(
         strikes=strikes,
         call_bid=call_bid,
         call_ask=call_ask,
@@ -150,19 +131,20 @@ def cell_prices(call_ask, call_bid, expiry, put_ask, put_bid, strikes):
         expiry=expiry,
         # forward and discount_factor omitted → calibrated from put-call parity
     )
+    prices = raw_prices.denoise()
     return (prices,)
 
 
 @app.cell(hide_code=True)
-def cell_prices_result(discount_factor, forward, prices):
-    """Display calibrated forward/DF and compare to true values."""
+def cell_prices_result(prices):
+    """Display calibrated forward/DF from put-call parity."""
     df_prices = pd.DataFrame(
         {
             "Strike": prices.strikes,
-            "Call Bid": prices.call_bid.round(4),
-            "Call Ask": prices.call_ask.round(4),
-            "Put Bid": prices.put_bid.round(4),
-            "Put Ask": prices.put_ask.round(4),
+            "Call Bid": prices.call_bid.round(2),
+            "Call Ask": prices.call_ask.round(2),
+            "Put Bid": prices.put_bid.round(2),
+            "Put Ask": prices.put_ask.round(2),
         }
     )
     mo.vstack(
@@ -170,15 +152,14 @@ def cell_prices_result(discount_factor, forward, prices):
             mo.md("### Calibrated Forward & Discount Factor"),
             mo.md(
                 f"""
-    | Quantity | Calibrated | True |
-    |----------|-----------|------|
-    | Forward  | {prices.forward:.4f} | {forward:.4f} |
-    | Discount Factor | {prices.discount_factor:.4f} | {discount_factor:.4f} |
+    | Quantity | Calibrated |
+    |----------|:---------:|
+    | Forward  | {prices.forward:.2f} |
+    | Discount Factor | {prices.discount_factor:.6f} |
     """
             ),
-            mo.md("### Price Data"),
-            # mo.ui.table(df_prices),
-            print(df_prices),
+            mo.md("### Price Data (sample)"),
+            print(df_prices.head(20)),
         ]
     )
     return
@@ -402,21 +383,20 @@ def cell_svi_fit(sd):
 
 
 @app.cell(hide_code=True)
-def cell_svi_params(p, result, true_params):
-    """Display fitted vs true SVI parameters."""
-    tp = true_params
+def cell_svi_params(p, result):
+    """Display fitted SVI parameters."""
     mo.vstack(
         [
-            mo.md("### Fitted vs True SVI Parameters"),
+            mo.md("### Fitted SVI Parameters"),
             mo.md(
                 f"""
-    | Parameter | Fitted | True | Δ |
-    |-----------|--------|------|---|
-    | $a$ | {p.a:.6f} | {tp.a:.6f} | {p.a - tp.a:+.6f} |
-    | $b$ | {p.b:.6f} | {tp.b:.6f} | {p.b - tp.b:+.6f} |
-    | $\\rho$ | {p.rho:.6f} | {tp.rho:.6f} | {p.rho - tp.rho:+.6f} |
-    | $m$ | {p.m:.6f} | {tp.m:.6f} | {p.m - tp.m:+.6f} |
-    | $\\sigma$ | {p.sigma:.6f} | {tp.sigma:.6f} | {p.sigma - tp.sigma:+.6f} |
+    | Parameter | Value | Description |
+    |-----------|-------|-------------|
+    | $a$ | {p.a:.6f} | Vertical translation |
+    | $b$ | {p.b:.6f} | Wing slope |
+    | $\\rho$ | {p.rho:.6f} | Skew (correlation) |
+    | $m$ | {p.m:.6f} | Horizontal shift |
+    | $\\sigma$ | {p.sigma:.6f} | ATM curvature |
 
     **RMSE:** {result.rmse:.2e} &nbsp;&nbsp; **Converged:** {"Yes" if result.success else "No"}
     """
@@ -427,10 +407,11 @@ def cell_svi_params(p, result, true_params):
 
 
 @app.cell(hide_code=True)
-def cell_svi_plot(expiry, forward, result, sd):
+def cell_svi_plot(expiry, result, sd):
     """Plot market vols with SVI fitted curve in strike space."""
-    _strikes_fine = np.linspace(sd.x.min() - 5, sd.x.max() + 5, 200)
-    _k_fine = np.log(_strikes_fine / forward)
+    _fwd = sd.metadata.forward
+    _strikes_fine = np.linspace(sd.x.min() * 0.95, sd.x.max() * 1.05, 200)
+    _k_fine = np.log(_strikes_fine / _fwd)
     _iv_fitted = svi_implied_vol(_k_fine, result.params, expiry)
 
     _fig = go.Figure()
