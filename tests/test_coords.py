@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from qsmile.coords import XCoord, YCoord
+from qsmile.core.coords import XCoord, YCoord
 
 
 class TestXCoord:

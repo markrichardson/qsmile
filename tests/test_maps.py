@@ -5,14 +5,14 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from qsmile.coords import XCoord, YCoord
-from qsmile.maps import (
+from qsmile.core.coords import XCoord, YCoord
+from qsmile.core.maps import (
     apply_x_chain,
     apply_y_chain,
     compose_x_maps,
     compose_y_maps,
 )
-from qsmile.metadata import SmileMetadata
+from qsmile.data.metadata import SmileMetadata
 
 META = SmileMetadata(forward=100.0, discount_factor=0.99, expiry=0.25, sigma_atm=0.20)
 STRIKES = np.array([90.0, 95.0, 100.0, 105.0, 110.0])

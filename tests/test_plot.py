@@ -7,9 +7,9 @@ import unittest.mock
 import numpy as np
 import pytest
 
-from qsmile.coords import XCoord, YCoord
-from qsmile.metadata import SmileMetadata
-from qsmile.smile_data import SmileData
+from qsmile.core.coords import XCoord, YCoord
+from qsmile.data.metadata import SmileMetadata
+from qsmile.data.smile_data import SmileData
 
 
 @pytest.fixture
@@ -69,8 +69,8 @@ class TestSmileDataPlot:
 
 class TestPricesPlot:
     def test_returns_figure(self):
-        from qsmile.black76 import black76_call, black76_put
-        from qsmile.prices import OptionChain
+        from qsmile.core.black76 import black76_call, black76_put
+        from qsmile.data.prices import OptionChain
 
         strikes = np.array([90.0, 100.0, 110.0])
         F, D, vol, T = 100.0, 1.0, 0.2, 0.5
@@ -95,7 +95,7 @@ class TestPricesPlot:
 
 class TestMatplotlibMissing:
     def test_import_error_raised(self):
-        from qsmile.plot import _require_matplotlib
+        from qsmile.core.plot import _require_matplotlib
 
         with (
             unittest.mock.patch.dict("sys.modules", {"matplotlib": None}),

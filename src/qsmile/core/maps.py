@@ -99,7 +99,7 @@ def _vol_to_price(y: NDArray[np.float64], x: NDArray[np.float64], meta: SmileMet
 
     x must be in FixedStrike coordinates (absolute strikes).
     """
-    from qsmile.black76 import black76_call
+    from qsmile.core.black76 import black76_call
 
     return np.asarray(
         black76_call(meta.forward, x, meta.discount_factor, y, meta.expiry),
@@ -112,7 +112,7 @@ def _price_to_vol(y: NDArray[np.float64], x: NDArray[np.float64], meta: SmileMet
 
     x must be in FixedStrike coordinates (absolute strikes).
     """
-    from qsmile.black76 import black76_implied_vol
+    from qsmile.core.black76 import black76_implied_vol
 
     n = len(y)
     result = np.empty(n, dtype=np.float64)

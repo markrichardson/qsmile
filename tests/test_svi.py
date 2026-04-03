@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from qsmile.svi import SVIParams, svi_implied_vol, svi_total_variance
+from qsmile.models.svi import SVIParams, svi_implied_vol, svi_total_variance
 
 
 class TestSVIParams:
