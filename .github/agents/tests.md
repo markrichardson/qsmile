@@ -38,31 +38,35 @@ If tests reveal that source code needs modification:
 ## Test Structure Principles
 
 ### One-to-One Module Correspondence
-Tests MUST have a one-to-one correspondence with source modules:
+Tests MUST mirror the `src/qsmile/` subpackage structure using matching subdirectories under `tests/`. Each source module maps to a test file at the same relative path.
 
 ```
-src/qsmile/core/black76.py      → tests/test_black76.py
-src/qsmile/core/coords.py       → tests/test_coords.py
-src/qsmile/core/maps.py         → tests/test_maps.py
-src/qsmile/core/plot.py         → tests/test_plot.py
-src/qsmile/data/meta.py         → tests/test_metadata.py
-src/qsmile/data/prices.py       → tests/test_prices.py
-src/qsmile/data/vols.py         → tests/test_vols.py
-src/qsmile/models/fitting.py    → tests/test_fitting.py
-src/qsmile/models/protocol.py   → (tested within test_fitting.py)
-src/qsmile/models/svi.py        → tests/test_svi.py
+src/qsmile/core/black76.py      → tests/core/test_black76.py
+src/qsmile/core/coords.py       → tests/core/test_coords.py
+src/qsmile/core/maps.py         → tests/core/test_maps.py
+src/qsmile/core/plot.py         → tests/core/test_plot.py
+src/qsmile/data/meta.py         → tests/data/test_metadata.py
+src/qsmile/data/prices.py       → tests/data/test_prices.py
+src/qsmile/data/vols.py         → tests/data/test_vols.py
+src/qsmile/models/fitting.py    → tests/models/test_fitting.py
+src/qsmile/models/protocol.py   → tests/models/test_svi.py (protocol conformance tests live here)
+src/qsmile/models/svi.py        → tests/models/test_svi.py
 ```
 
-Additional cross-cutting test files:
+**Rules:**
+- Every source module in `src/qsmile/` MUST have a corresponding test file.
+- Test directories MUST mirror the `src/qsmile/` subpackage hierarchy (`tests/core/`, `tests/data/`, `tests/models/`).
+- Test files MUST import from the source module they cover (e.g. `from qsmile.models.svi import SVIParams`).
+- Tests for a module MUST NOT live in a test file that maps to a different module — place them in the correct file.
+- Package `__init__.py` files do not require their own test files unless they contain non-trivial logic.
+
+Additional cross-cutting test files are permitted for integration tests that span multiple modules:
 ```
 tests/test_chain.py              — OptionChain integration tests
-tests/test_core.py               — Core module integration
 tests/test_smile_data.py         — SmileData integration tests
 tests/test_to_smile_data.py      — OptionChain → SmileData conversion
 tests/test_unitised.py           — Unitised coordinate space tests
 ```
-
-**Important:** When adding a new module to `src/qsmile/`, you MUST create a corresponding test file.
 
 ### Shared Test Fixtures
 - **`tests/conftest.py`** — Shared fixtures (if created)
@@ -218,7 +222,7 @@ Always use project conventions for running tests:
 ```bash
 # ✅ Correct
 make test
-uv run pytest tests/test_fitting.py -v
+uv run pytest tests/models/test_fitting.py -v
 uv run pytest --cov=src/qsmile --cov-report=term-missing
 
 # ❌ Incorrect — never invoke .venv binaries directly
@@ -272,14 +276,14 @@ def test_transform_preserves_length(self, x_coord, y_coord):
 
 ## Module-Specific Guidelines
 
-### test_black76.py
+### tests/core/test_black76.py
 Tests for Black76 pricing functions:
 - Call and put pricing accuracy
 - Put-call parity
 - Implied vol inversion round-trips
 - Edge cases (deep ITM/OTM, zero vol)
 
-### test_svi.py
+### tests/models/test_svi.py
 Tests for SVIParams:
 - `evaluate(k)` matches the SVI formula
 - `implied_vol(k, T)` consistency with `evaluate`
@@ -288,7 +292,7 @@ Tests for SVIParams:
 - `initial_guess` returns correct length
 - `bounds` and `param_names` properties
 
-### test_fitting.py
+### tests/models/test_fitting.py
 Tests for the generic `fit()` function:
 - Synthetic round-trip recovery of known params
 - Noisy data convergence
@@ -296,20 +300,20 @@ Tests for the generic `fit()` function:
 - `SmileResult` properties (residuals, rmse, success, evaluate)
 - Parameter bounds enforcement
 
-### test_prices.py
+### tests/data/test_prices.py
 Tests for `OptionChain`:
 - Construction and validation
 - Forward/DF calibration from put-call parity
 - `denoise()` filtering
 - `to_smile_data()` conversion
 
-### test_maps.py
+### tests/core/test_maps.py
 Tests for coordinate transform maps:
 - Forward and inverse transforms
 - Composability
 - Numerical accuracy
 
-### test_coords.py
+### tests/core/test_coords.py
 Tests for coordinate enums:
 - `XCoord` and `YCoord` values
 - Enum membership
