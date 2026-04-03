@@ -6,7 +6,7 @@ import dataclasses
 
 import pytest
 
-from qsmile.data.metadata import SmileMetadata
+from qsmile.data.meta import SmileMetadata
 
 
 class TestSmileMetadataConstruction:

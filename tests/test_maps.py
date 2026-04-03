@@ -12,7 +12,7 @@ from qsmile.core.maps import (
     compose_x_maps,
     compose_y_maps,
 )
-from qsmile.data.metadata import SmileMetadata
+from qsmile.data.meta import SmileMetadata
 
 META = SmileMetadata(forward=100.0, discount_factor=0.99, expiry=0.25, sigma_atm=0.20)
 STRIKES = np.array([90.0, 95.0, 100.0, 105.0, 110.0])

@@ -8,8 +8,8 @@ import numpy as np
 import pytest
 
 from qsmile.core.coords import XCoord, YCoord
-from qsmile.data.metadata import SmileMetadata
-from qsmile.data.smile_data import SmileData
+from qsmile.data.meta import SmileMetadata
+from qsmile.data.vols import SmileData
 
 
 @pytest.fixture

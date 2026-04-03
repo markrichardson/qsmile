@@ -18,7 +18,7 @@ from qsmile.core.maps import (
     compose_x_maps,
     compose_y_maps,
 )
-from qsmile.data.metadata import SmileMetadata
+from qsmile.data.meta import SmileMetadata
 
 
 @dataclass

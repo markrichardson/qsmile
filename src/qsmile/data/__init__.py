@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from qsmile.data.metadata import SmileMetadata
+from qsmile.data.meta import SmileMetadata
 from qsmile.data.prices import OptionChain
-from qsmile.data.smile_data import SmileData
+from qsmile.data.vols import SmileData
 
 __all__ = [
     "OptionChain",

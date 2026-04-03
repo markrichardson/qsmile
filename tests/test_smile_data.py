@@ -6,8 +6,8 @@ import numpy as np
 import pytest
 
 from qsmile.core.coords import XCoord, YCoord
-from qsmile.data.metadata import SmileMetadata
-from qsmile.data.smile_data import SmileData
+from qsmile.data.meta import SmileMetadata
+from qsmile.data.vols import SmileData
 
 META = SmileMetadata(forward=100.0, discount_factor=0.99, expiry=0.25, sigma_atm=0.20)
 STRIKES = np.array([90.0, 95.0, 100.0, 105.0, 110.0])

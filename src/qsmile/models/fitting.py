@@ -9,7 +9,7 @@ from numpy.typing import ArrayLike, NDArray
 from scipy.optimize import least_squares
 
 from qsmile.core.coords import XCoord, YCoord
-from qsmile.data.smile_data import SmileData
+from qsmile.data.vols import SmileData
 from qsmile.models.svi import SVIParams, svi_total_variance
 
 

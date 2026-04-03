@@ -5,8 +5,8 @@ from __future__ import annotations
 import numpy as np
 
 from qsmile.core.coords import XCoord, YCoord
-from qsmile.data.metadata import SmileMetadata
-from qsmile.data.smile_data import SmileData
+from qsmile.data.meta import SmileMetadata
+from qsmile.data.vols import SmileData
 
 
 def _make_unitised_smile_data() -> SmileData:

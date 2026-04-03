@@ -11,7 +11,7 @@ from numpy.typing import NDArray
 from qsmile.core.coords import XCoord, YCoord
 
 if TYPE_CHECKING:
-    from qsmile.data.metadata import SmileMetadata
+    from qsmile.data.meta import SmileMetadata
 
 # Type alias for map functions
 # X-maps: (x_array, metadata) -> x_array
