@@ -81,7 +81,7 @@ def _calibrate_forward_df(
 
 
 @dataclass
-class OptionChainPrices:
+class OptionChain:
     """Bid/ask option price chain for a single expiry.
 
     Parameters
@@ -200,6 +200,121 @@ class OptionChainPrices:
                 discount_factor=self.discount_factor,
                 expiry=self.expiry,
             ),
+        )
+
+    def denoise(self) -> OptionChain:
+        """Return a cleaned copy with stale and implausible quotes removed.
+
+        Applies five filters in sequence:
+
+        1. **Zero-bid filter** -- removes strikes where either the call or put
+           bid is zero (no genuine two-sided market).
+        2. **Put-call parity monotonicity** -- C_mid - P_mid must be strictly
+           decreasing in strike (since it equals D*(F - K)).  Strikes that
+           break monotonicity carry stale or mismarked quotes and are dropped.
+        3. **Call- and put-mid monotonicity** -- call mids must be non-increasing
+           and put mids non-decreasing in strike.  Any remaining violations are
+           removed.
+        4. **Sub-intrinsic filter** -- removes strikes where call or put mid
+           prices fall below their intrinsic value (using the calibrated
+           forward), which indicates illiquid deep-ITM quotes.
+        5. **Parity residual filter** -- removes strikes where the put-call
+           parity residual |C_mid - P_mid - D*(F - K)| exceeds 3x the
+           combined half bid-ask spread, indicating a stale or mispriced
+           deep-ITM quote.
+
+        Returns:
+        -------
+        OptionChain
+            A new ``OptionChain`` with the noisy strikes removed and
+            ``forward`` / ``discount_factor`` re-calibrated on the clean data.
+        """
+        keep = np.ones(len(self.strikes), dtype=bool)
+
+        # 1. Both sides must quote a positive bid
+        keep &= self.call_bid > 0
+        keep &= self.put_bid > 0
+
+        # Work on the surviving subset for the monotonicity checks
+        def _non_monotone_mask(values: NDArray[np.float64], decreasing: bool) -> NDArray[np.bool_]:
+            """Return a mask (True = keep) that removes non-monotone points.
+
+            Iteratively drops the point at each violation until the sequence
+            is monotone, working from the largest violation first.
+            """
+            mask = np.ones(len(values), dtype=bool)
+            while True:
+                vals = values[mask]
+                diff = np.diff(vals)
+                bad = diff > 0 if decreasing else diff < 0
+                if not np.any(bad):
+                    break
+                # Find the worst violation in the filtered view
+                magnitudes = np.abs(diff) * bad
+                worst_idx = int(np.argmax(magnitudes))
+                # Map back to the full-array index and remove the point
+                # (remove the second element of the pair that violates)
+                full_indices = np.where(mask)[0]
+                mask[full_indices[worst_idx + 1]] = False
+            return mask
+
+        # 2. Put-call parity: C_mid - P_mid must be strictly decreasing
+        parity = self.call_mid[keep] - self.put_mid[keep]
+        parity_keep = _non_monotone_mask(parity, decreasing=True)
+        keep_indices = np.where(keep)[0]
+        keep[keep_indices[~parity_keep]] = False
+
+        # 3a. Call mids must be non-increasing in strike
+        call_keep = _non_monotone_mask(self.call_mid[keep], decreasing=True)
+        keep_indices = np.where(keep)[0]
+        keep[keep_indices[~call_keep]] = False
+
+        # 3b. Put mids must be non-decreasing in strike
+        put_keep = _non_monotone_mask(self.put_mid[keep], decreasing=False)
+        keep_indices = np.where(keep)[0]
+        keep[keep_indices[~put_keep]] = False
+
+        # 4. Sub-intrinsic filter: calibrate F on clean data, then remove
+        #    strikes where the mid price is below intrinsic value
+        clean_strikes = self.strikes[keep]
+        clean_c_mid = self.call_mid[keep]
+        clean_p_mid = self.put_mid[keep]
+        f_est, d_est = _calibrate_forward_df(clean_strikes, clean_c_mid, clean_p_mid)
+        call_intrinsic = np.maximum(f_est - clean_strikes, 0.0)
+        put_intrinsic = np.maximum(clean_strikes - f_est, 0.0)
+        intrinsic_ok = (clean_c_mid >= call_intrinsic) & (clean_p_mid >= put_intrinsic)
+        keep_indices = np.where(keep)[0]
+        keep[keep_indices[~intrinsic_ok]] = False
+
+        # 5. Parity residual filter (iterative): |C-P - D*(F-K)| must be
+        #    within a small multiple of the combined half bid-ask spread.
+        #    Iteratively remove the worst outlier and recalibrate F/DF,
+        #    since a single stale deep-ITM quote can bias the calibration.
+        while np.sum(keep) >= 3:
+            ks = self.strikes[keep]
+            cm = self.call_mid[keep]
+            pm = self.put_mid[keep]
+            f_est, d_est = _calibrate_forward_df(ks, cm, pm)
+            parity_actual = cm - pm
+            parity_predicted = d_est * (f_est - ks)
+            half_spread = (
+                (self.call_ask[keep] - self.call_bid[keep]) + (self.put_ask[keep] - self.put_bid[keep])
+            ) / 2.0
+            ratio = np.abs(parity_actual - parity_predicted) / np.maximum(half_spread, 1e-10)
+            worst = int(np.argmax(ratio))
+            if ratio[worst] <= 3.0:
+                break
+            keep_indices = np.where(keep)[0]
+            keep[keep_indices[worst]] = False
+
+        return OptionChain(
+            strikes=self.strikes[keep],
+            call_bid=self.call_bid[keep],
+            call_ask=self.call_ask[keep],
+            put_bid=self.put_bid[keep],
+            put_ask=self.put_ask[keep],
+            expiry=self.expiry,
+            # Re-calibrate forward/DF on the clean data
         )
 
     def plot(self, *, title: str = "Option Chain Prices") -> matplotlib.figure.Figure:

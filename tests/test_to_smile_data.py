@@ -6,10 +6,10 @@ import numpy as np
 
 from qsmile.black76 import black76_call
 from qsmile.coords import XCoord, YCoord
-from qsmile.prices import OptionChainPrices
+from qsmile.prices import OptionChain
 
 
-class TestOptionChainPricesToSmileData:
+class TestOptionChainToSmileData:
     def test_coordinates(self) -> None:
         strikes = np.array([90.0, 95.0, 100.0, 105.0, 110.0])
         forward = 100.0
@@ -37,7 +37,7 @@ class TestOptionChainPricesToSmileData:
         # Ensure put_bid <= put_ask
         put_bid, put_ask = np.minimum(put_bid, put_ask), np.maximum(put_bid, put_ask)
 
-        prices = OptionChainPrices(
+        prices = OptionChain(
             strikes=strikes,
             call_bid=call_bid,
             call_ask=call_ask,

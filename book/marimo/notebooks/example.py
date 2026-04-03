@@ -5,7 +5,9 @@
 #     "numpy>=1.24.0",
 #     "plotly>=5.18.0",
 #     "pandas>=2.0.0",
+#     "pyarrow>=17.0.0",
 #     "scipy>=1.14.0",
+#     "cvxpy>=1.6.0",
 #     "qsmile",
 # ]
 #
@@ -20,13 +22,16 @@ __generated_with = "0.21.1"
 app = marimo.App(width="medium")
 
 with app.setup:
+    from pathlib import Path
+
     import marimo as mo
     import numpy as np
     import pandas as pd
     import plotly.graph_objects as go
 
-    from qsmile import SmileData, SVIParams, fit_svi, svi_implied_vol
+    from qsmile import SVIParams, fit_svi, svi_implied_vol
     from qsmile.coords import XCoord, YCoord
+    from qsmile.prices import OptionChain
 
 
 @app.cell(hide_code=True)
@@ -61,8 +66,11 @@ def cell_04():
         r"""
         ## Market Data
 
-        We'll start with a synthetic option chain that exhibits a realistic skew —
-        lower strikes (puts) have higher implied volatility than higher strikes (calls).
+        We load a real S&P 500 (SPX) option chain from parquet and build
+        an `OptionChain` to calibrate a consistent forward and discount
+        factor from put-call parity. The resulting implied volatilities are
+        then extracted via `to_smile_data()`, giving a clean smile with the
+        characteristic equity skew.
         """
     )
     return
@@ -70,16 +78,35 @@ def cell_04():
 
 @app.cell(hide_code=True)
 def cell_05():
-    """Create synthetic market data with realistic skew."""
-    # Synthetic market data with realistic equity skew
-    forward = 100.0
-    expiry = 0.5  # 6 months
+    """Load real SPX market data from parquet."""
+    _root = Path(__file__).resolve().parent.parent.parent.parent
+    _pq = sorted(_root.glob("parquet/chains/*.parquet"))[-1]
+    df_raw = pd.read_parquet(_pq)
 
-    strikes = np.array([80, 85, 90, 95, 100, 105, 110, 115, 120])
-    # Generated from SVI(a=0.008, b=0.08, rho=-0.6, m=-0.02, sigma=0.10), rounded to 4dp
-    ivs = np.array([0.2678, 0.2399, 0.2127, 0.1891, 0.1743, 0.1698, 0.1713, 0.1756, 0.1808])
+    expiry = float(df_raw["daysToExpiry"].iloc[0]) / 365.0
 
-    sd = SmileData.from_mid_vols(strikes=strikes, ivs=ivs, forward=forward, expiry=expiry)
+    # Merge calls/puts on common strikes
+    _cols = ["strike", "bid", "ask"]
+    calls = df_raw[df_raw["optionType"] == "call"][_cols].set_index("strike")
+    puts = df_raw[df_raw["optionType"] == "put"][_cols].set_index("strike")
+    merged = calls.join(puts, lsuffix="_c", rsuffix="_p", how="inner").sort_index()
+
+    # Build OptionChain → denoise → calibrate F, DF → extract vols
+    _strikes = merged.index.values.astype(np.float64)
+    raw_prices = OptionChain(
+        strikes=_strikes,
+        call_bid=merged["bid_c"].values.astype(np.float64),
+        call_ask=merged["ask_c"].values.astype(np.float64),
+        put_bid=merged["bid_p"].values.astype(np.float64),
+        put_ask=merged["ask_p"].values.astype(np.float64),
+        expiry=expiry,
+    )
+    prices = raw_prices.denoise()
+
+    # Convert to SmileData in vol coordinates (consistent F and DF)
+    sd = prices.to_smile_data().transform(XCoord.FixedStrike, YCoord.Volatility)
+    strikes = sd.x
+    ivs = sd.y_mid
     return expiry, ivs, sd, strikes
 
 
@@ -233,12 +260,46 @@ def cell_13():
 @app.cell(hide_code=True)
 def cell_14(p):
     """Create sliders for SVI parameters."""
-    sl_a = mo.ui.slider(start=-1.0, stop=1.0, value=round(p.a, 4), step=0.005, label="a (level):", show_value=True)
-    sl_b = mo.ui.slider(start=0.01, stop=2.0, value=round(p.b, 4), step=0.01, label="b (wings):", show_value=True)
-    sl_rho = mo.ui.slider(start=-0.99, stop=0.99, value=round(p.rho, 4), step=0.01, label="ρ (skew):", show_value=True)
-    sl_m = mo.ui.slider(start=-1.0, stop=1.0, value=round(p.m, 4), step=0.01, label="m (shift):", show_value=True)
+    # Ranges are data-adaptive: centred on the fitted value with room to explore
+    sl_a = mo.ui.slider(
+        start=min(-1.0, p.a * 3),
+        stop=max(1.0, p.a * 3),
+        value=round(p.a, 4),
+        step=0.005,
+        label="a (level):",
+        show_value=True,
+    )
+    sl_b = mo.ui.slider(
+        start=0.001,
+        stop=max(2.0, p.b * 2),
+        value=round(p.b, 4),
+        step=max(0.01, p.b * 0.01),
+        label="b (wings):",
+        show_value=True,
+    )
+    sl_rho = mo.ui.slider(
+        start=-0.999,
+        stop=0.999,
+        value=round(min(max(p.rho, -0.999), 0.999), 4),
+        step=0.001,
+        label="\u03c1 (skew):",
+        show_value=True,
+    )
+    sl_m = mo.ui.slider(
+        start=min(-1.0, p.m * 3),
+        stop=max(1.0, p.m * 3),
+        value=round(p.m, 4),
+        step=0.01,
+        label="m (shift):",
+        show_value=True,
+    )
     sl_sigma = mo.ui.slider(
-        start=0.01, stop=2.0, value=round(p.sigma, 4), step=0.01, label="σ (curvature):", show_value=True
+        start=min(0.001, p.sigma / 2),
+        stop=max(2.0, p.sigma * 4),
+        value=round(p.sigma, 4),
+        step=max(0.001, p.sigma * 0.05),
+        label="\u03c3 (curvature):",
+        show_value=True,
     )
     mo.vstack([sl_a, sl_b, sl_rho, sl_m, sl_sigma])
     return sl_a, sl_b, sl_m, sl_rho, sl_sigma
@@ -360,7 +421,7 @@ def cell_23():
         For a complete bid/ask workflow starting from raw option prices, see the
         **Chain Demo** notebook which walks through:
 
-        1. `OptionChainPrices` — bid/ask prices with auto-calibrated forward & discount factor
+        1. `OptionChain` — bid/ask prices with auto-calibrated forward & discount factor
         2. `SmileData` — unified container with **coordinate transforms** between
            any combination of X-coords (Strike, Moneyness, Log-Moneyness, Standardised)
            and Y-coords (Price, Volatility, Variance, Total Variance)

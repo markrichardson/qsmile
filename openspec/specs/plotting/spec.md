@@ -1,10 +1,10 @@
 ## Requirements
 
-### Requirement: OptionChainPrices provides a plot method
-The system SHALL provide a `.plot()` method on `OptionChainPrices` that renders a figure with bid and ask prices shown as error bars at each strike. Calls and puts SHALL be distinguishable (e.g., different colours or markers).
+### Requirement: OptionChain provides a plot method
+The system SHALL provide a `.plot()` method on `OptionChain` that renders a figure with bid and ask prices shown as error bars at each strike. Calls and puts SHALL be distinguishable (e.g., different colours or markers).
 
 #### Scenario: Plot prices
-- **WHEN** `.plot()` is called on a valid `OptionChainPrices`
+- **WHEN** `.plot()` is called on a valid `OptionChain`
 - **THEN** the system SHALL return a `matplotlib.figure.Figure` with error bars spanning bid to ask for both calls and puts
 
 #### Scenario: Plot with custom title

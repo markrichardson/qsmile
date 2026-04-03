@@ -8,10 +8,10 @@ The system SHALL provide a `to_unitised()` method that converts the vol chain to
 - **THEN** the system SHALL return a `UnitisedSpaceVols` with correctly normalised coordinates for both bid and ask
 
 ### Requirement: OptionChainVols converts to prices
-The system SHALL provide a `to_prices()` method that converts vol chain back to an `OptionChainPrices` using Black76 pricing. This method SHALL be implemented as a convenience wrapper that internally constructs a `SmileData` with `(FixedStrike, Volatility)` coordinates, transforms to `(FixedStrike, Price)`, and unpacks the result.
+The system SHALL provide a `to_prices()` method that converts vol chain back to an `OptionChain` using Black76 pricing. This method SHALL be implemented as a convenience wrapper that internally constructs a `SmileData` with `(FixedStrike, Volatility)` coordinates, transforms to `(FixedStrike, Price)`, and unpacks the result.
 
 #### Scenario: Vol to price round-trip
-- **WHEN** an `OptionChainPrices` is converted to vols via `to_vols()` and back via `to_prices()`
+- **WHEN** an `OptionChain` is converted to vols via `to_vols()` and back via `to_prices()`
 - **THEN** the recovered prices SHALL match the originals within floating-point tolerance
 
 ## ADDED Requirements
