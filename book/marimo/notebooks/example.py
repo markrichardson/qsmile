@@ -31,7 +31,7 @@ with app.setup:
 
     from qsmile import SVIParams, fit_svi, svi_implied_vol
     from qsmile.coords import XCoord, YCoord
-    from qsmile.prices import OptionChainPrices
+    from qsmile.prices import OptionChain
 
 
 @app.cell(hide_code=True)
@@ -67,7 +67,7 @@ def cell_04():
         ## Market Data
 
         We load a real S&P 500 (SPX) option chain from parquet and build
-        an `OptionChainPrices` to calibrate a consistent forward and discount
+        an `OptionChain` to calibrate a consistent forward and discount
         factor from put-call parity. The resulting implied volatilities are
         then extracted via `to_smile_data()`, giving a clean smile with the
         characteristic equity skew.
@@ -91,9 +91,9 @@ def cell_05():
     puts = df_raw[df_raw["optionType"] == "put"][_cols].set_index("strike")
     merged = calls.join(puts, lsuffix="_c", rsuffix="_p", how="inner").sort_index()
 
-    # Build OptionChainPrices → denoise → calibrate F, DF → extract vols
+    # Build OptionChain → denoise → calibrate F, DF → extract vols
     _strikes = merged.index.values.astype(np.float64)
-    raw_prices = OptionChainPrices(
+    raw_prices = OptionChain(
         strikes=_strikes,
         call_bid=merged["bid_c"].values.astype(np.float64),
         call_ask=merged["ask_c"].values.astype(np.float64),
@@ -421,7 +421,7 @@ def cell_23():
         For a complete bid/ask workflow starting from raw option prices, see the
         **Chain Demo** notebook which walks through:
 
-        1. `OptionChainPrices` — bid/ask prices with auto-calibrated forward & discount factor
+        1. `OptionChain` — bid/ask prices with auto-calibrated forward & discount factor
         2. `SmileData` — unified container with **coordinate transforms** between
            any combination of X-coords (Strike, Moneyness, Log-Moneyness, Standardised)
            and Y-coords (Price, Volatility, Variance, Total Variance)

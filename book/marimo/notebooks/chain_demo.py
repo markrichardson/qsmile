@@ -30,7 +30,7 @@ with app.setup:
     import plotly.graph_objects as go
 
     from qsmile import (
-        OptionChainPrices,
+        OptionChain,
         XCoord,
         YCoord,
         fit_svi,
@@ -48,7 +48,7 @@ def cell_intro():
         This notebook demonstrates the **qsmile** option chain pipeline using
         **real S&P 500 (SPX) option chain data** loaded from parquet:
 
-        1. **`OptionChainPrices`** — real bid/ask option prices, with forward & discount
+        1. **`OptionChain`** — real bid/ask option prices, with forward & discount
            factor calibrated automatically from put-call parity
         2. **`SmileData`** — unified coordinate-labelled container with
            `.transform(x, y)` to freely move between strike/moneyness/log-moneyness/standardised
@@ -109,9 +109,9 @@ def cell_prices_intro():
     """Introduce the prices stage."""
     mo.md(
         r"""
-        ## Stage 1 — `OptionChainPrices`
+        ## Stage 1 — `OptionChain`
 
-        Construct an `OptionChainPrices` from the real SPX bid/ask prices.
+        Construct an `OptionChain` from the real SPX bid/ask prices.
         The forward and discount factor are **calibrated from put-call parity**
         using quasi-delta weighted least squares.
         """
@@ -121,8 +121,8 @@ def cell_prices_intro():
 
 @app.cell
 def cell_prices(call_ask, call_bid, expiry, put_ask, put_bid, strikes):
-    """Build OptionChainPrices — forward/DF calibrated automatically."""
-    raw_prices = OptionChainPrices(
+    """Build OptionChain — forward/DF calibrated automatically."""
+    raw_prices = OptionChain(
         strikes=strikes,
         call_bid=call_bid,
         call_ask=call_ask,
@@ -249,7 +249,7 @@ def cell_transforms_intro():
 
 @app.cell
 def cell_smile_data(prices):
-    """Create SmileData from OptionChainPrices and transform to vols."""
+    """Create SmileData from OptionChain and transform to vols."""
     sd_prices = prices.to_smile_data()
     sd = sd_prices.transform(XCoord.FixedStrike, YCoord.Volatility)
     return (sd,)
@@ -469,7 +469,7 @@ def cell_summary():
 
         | Step | Class | Method |
         |------|-------|--------|
-        | Raw prices with bid/ask | `OptionChainPrices` | *constructor* — auto-calibrates F, D |
+        | Raw prices with bid/ask | `OptionChain` | *constructor* — auto-calibrates F, D |
         | → Any coordinate system | `SmileData` | `.to_smile_data().transform(x, y)` |
         | → SVI smile fit | `SmileResult` | `fit_svi(sd)` |
 

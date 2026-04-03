@@ -70,14 +70,14 @@ class TestSmileDataPlot:
 class TestPricesPlot:
     def test_returns_figure(self):
         from qsmile.black76 import black76_call, black76_put
-        from qsmile.prices import OptionChainPrices
+        from qsmile.prices import OptionChain
 
         strikes = np.array([90.0, 100.0, 110.0])
         F, D, vol, T = 100.0, 1.0, 0.2, 0.5
         call_mid = np.array([float(black76_call(F, K, D, vol, T)) for K in strikes])
         put_mid = np.array([float(black76_put(F, K, D, vol, T)) for K in strikes])
 
-        chain = OptionChainPrices(
+        chain = OptionChain(
             strikes=strikes,
             call_bid=call_mid - 0.1,
             call_ask=call_mid + 0.1,

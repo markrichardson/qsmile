@@ -31,7 +31,7 @@
 
 ### Key capabilities
 
-- **Bid/ask option prices** — `OptionChainPrices` stores bid/ask call and put prices, and automatically calibrates the forward and discount factor from put-call parity using quasi-delta weighted least squares.
+- **Bid/ask option prices** — `OptionChain` stores bid/ask call and put prices, and automatically calibrates the forward and discount factor from put-call parity using quasi-delta weighted least squares.
 - **Coordinate transforms** — `SmileData` is a unified container with `.transform(x, y)` to freely convert between any combination of X-coordinates (Strike, Moneyness, Log-Moneyness, Standardised) and Y-coordinates (Price, Volatility, Variance, Total Variance) via composable, invertible maps.
 - **SVI fitting** — Fit the SVI raw parameterisation to `SmileData`:
 
@@ -67,10 +67,10 @@ make install
 
 ```python +RHIZA_SKIP
 import numpy as np
-from qsmile import OptionChainPrices, SmileData, XCoord, YCoord, fit_svi
+from qsmile import OptionChain, SmileData, XCoord, YCoord, fit_svi
 
 # Bid/ask prices — forward and DF are calibrated automatically
-prices = OptionChainPrices(
+prices = OptionChain(
     strikes=np.array([80, 90, 95, 100, 105, 110, 120], dtype=float),
     call_bid=np.array([20.5, 11.8, 7.5, 4.2, 2.0, 0.8, 0.1]),
     call_ask=np.array([21.5, 12.4, 8.0, 4.6, 2.3, 1.0, 0.2]),
@@ -118,13 +118,13 @@ print(result.rmse)     # Root mean square error
 
 | Class | Description |
 |---|---|
-| `OptionChainPrices` | Bid/ask call and put prices with automatic forward/DF calibration |
+| `OptionChain` | Bid/ask call and put prices with automatic forward/DF calibration |
 | `SmileData` | Unified coordinate-labelled container with `.transform(x, y)` and `.from_mid_vols()` factory |
 
 ### Coordinate transforms
 
 ```
-OptionChainPrices ─── .to_smile_data() ──→ SmileData ─── .transform(x, y) ──→ SmileData
+OptionChain ─── .to_smile_data() ──→ SmileData ─── .transform(x, y) ──→ SmileData
 SmileData.from_mid_vols(...)            ──→ SmileData ───────────────────────────┘
 ```
 

@@ -81,7 +81,7 @@ def _calibrate_forward_df(
 
 
 @dataclass
-class OptionChainPrices:
+class OptionChain:
     """Bid/ask option price chain for a single expiry.
 
     Parameters
@@ -202,7 +202,7 @@ class OptionChainPrices:
             ),
         )
 
-    def denoise(self) -> OptionChainPrices:
+    def denoise(self) -> OptionChain:
         """Return a cleaned copy with stale and implausible quotes removed.
 
         Applies five filters in sequence:
@@ -225,8 +225,8 @@ class OptionChainPrices:
 
         Returns:
         -------
-        OptionChainPrices
-            A new ``OptionChainPrices`` with the noisy strikes removed and
+        OptionChain
+            A new ``OptionChain`` with the noisy strikes removed and
             ``forward`` / ``discount_factor`` re-calibrated on the clean data.
         """
         keep = np.ones(len(self.strikes), dtype=bool)
@@ -307,7 +307,7 @@ class OptionChainPrices:
             keep_indices = np.where(keep)[0]
             keep[keep_indices[worst]] = False
 
-        return OptionChainPrices(
+        return OptionChain(
             strikes=self.strikes[keep],
             call_bid=self.call_bid[keep],
             call_ask=self.call_ask[keep],
