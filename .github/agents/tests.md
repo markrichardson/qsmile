@@ -49,7 +49,8 @@ src/qsmile/data/meta.py         → tests/data/test_metadata.py
 src/qsmile/data/prices.py       → tests/data/test_prices.py
 src/qsmile/data/vols.py         → tests/data/test_vols.py
 src/qsmile/models/fitting.py    → tests/models/test_fitting.py
-src/qsmile/models/protocol.py   → tests/models/test_svi.py (protocol conformance tests live here)
+src/qsmile/models/protocol.py   → tests/models/test_abstract_smile_model.py, tests/models/test_svi.py (protocol conformance)
+src/qsmile/models/sabr.py       → tests/models/test_sabr.py, tests/models/test_sabr_fitting.py
 src/qsmile/models/svi.py        → tests/models/test_svi.py
 ```
 

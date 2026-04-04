@@ -1,0 +1,87 @@
+"""Tests for SABR model fitting via the generic fit() engine."""
+
+from __future__ import annotations
+
+import numpy as np
+
+from qsmile.data.vols import SmileData
+from qsmile.models.fitting import SmileResult, fit
+from qsmile.models.sabr import SABRModel
+
+# Known-good SABR parameters for synthetic round-trip tests
+_TRUE_PARAMS = SABRModel(alpha=0.2, beta=0.5, rho=-0.3, nu=0.4, expiry=1.0, forward=100.0)
+
+
+def _make_synthetic_sabr_sd(
+    params: SABRModel = _TRUE_PARAMS,
+    n_strikes: int = 20,
+    strike_lo: float = 80.0,
+    strike_hi: float = 120.0,
+) -> SmileData:
+    """Generate SmileData from known SABR parameters (noiseless)."""
+    strikes = np.linspace(strike_lo, strike_hi, n_strikes)
+    k = np.log(strikes / params.forward)
+    ivs = params.evaluate(k)
+    # Ensure ivs is an array
+    ivs = np.asarray(ivs, dtype=np.float64)
+    return SmileData.from_mid_vols(strikes=strikes, ivs=ivs, forward=params.forward, expiry=params.expiry)
+
+
+class TestFitSABRSyntheticRoundTrip:
+    """Fit SABR to noiseless data generated from known parameters."""
+
+    def test_recover_known_params(self):
+        sd = _make_synthetic_sabr_sd()
+        result = fit(sd, SABRModel)
+
+        assert result.success
+        assert result.rmse < 1e-6
+        assert isinstance(result.params, SABRModel)
+        assert isinstance(result, SmileResult)
+
+    def test_fitted_params_close_to_true(self):
+        sd = _make_synthetic_sabr_sd()
+        result = fit(sd, SABRModel)
+
+        np.testing.assert_allclose(result.params.alpha, _TRUE_PARAMS.alpha, rtol=0.05)
+        np.testing.assert_allclose(result.params.beta, _TRUE_PARAMS.beta, atol=0.1)
+        np.testing.assert_allclose(result.params.rho, _TRUE_PARAMS.rho, atol=0.1)
+        np.testing.assert_allclose(result.params.nu, _TRUE_PARAMS.nu, rtol=0.1)
+
+    def test_context_fields_preserved(self):
+        """Expiry and forward should be on the fitted result."""
+        sd = _make_synthetic_sabr_sd()
+        result = fit(sd, SABRModel)
+
+        assert result.params.expiry == _TRUE_PARAMS.expiry
+        assert result.params.forward == _TRUE_PARAMS.forward
+
+
+class TestFitSABRNoisyData:
+    def test_noisy_fit_succeeds(self):
+        sd = _make_synthetic_sabr_sd()
+        # Add noise to simulated market data
+        rng = np.random.default_rng(42)
+        noisy_ivs = np.asarray(_TRUE_PARAMS.evaluate(np.log(sd.x / _TRUE_PARAMS.forward))) + rng.normal(
+            0, 0.002, size=sd.x.shape
+        )
+        sd_noisy = SmileData.from_mid_vols(
+            strikes=sd.x,
+            ivs=noisy_ivs,
+            forward=_TRUE_PARAMS.forward,
+            expiry=_TRUE_PARAMS.expiry,
+        )
+        result = fit(sd_noisy, SABRModel)
+
+        assert result.success
+        assert result.rmse < 0.01
+
+
+class TestFitSABRCustomInitialGuess:
+    def test_custom_initial_params(self):
+        sd = _make_synthetic_sabr_sd(n_strikes=15, strike_lo=85.0, strike_hi=115.0)
+        guess = SABRModel(alpha=0.15, beta=0.4, rho=-0.2, nu=0.3, expiry=1.0, forward=100.0)
+        result = fit(sd, SABRModel, initial_guess=guess)
+
+        assert result.success
+        assert result.rmse < 1e-4

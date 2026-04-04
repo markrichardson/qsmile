@@ -3,16 +3,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import ClassVar, Self
+from typing import ClassVar
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 from qsmile.core.coords import XCoord, YCoord
+from qsmile.models.protocol import AbstractSmileModel
 
 
 @dataclass
-class SVIModel:
+class SVIModel(AbstractSmileModel):
     """Raw SVI parameterisation: model definition and fitted parameters.
 
     The SVI raw parameterisation models total implied variance as:
@@ -70,10 +71,6 @@ class SVIModel:
             msg = f"sigma must be positive, got {self.sigma}"
             raise ValueError(msg)
 
-    def to_array(self) -> NDArray[np.float64]:
-        """Pack parameters into a flat array."""
-        return np.array([self.a, self.b, self.rho, self.m, self.sigma])
-
     def evaluate(self, x: ArrayLike) -> NDArray[np.float64] | np.float64:
         """Compute SVI total variance at the given log-moneyness values.
 
@@ -100,17 +97,6 @@ class SVIModel:
             raise ValueError(msg)
         w = self.evaluate(k)
         return np.sqrt(w / expiry)
-
-    @classmethod
-    def from_array(cls, x: NDArray[np.float64]) -> Self:
-        """Reconstruct an SVIModel from a flat parameter array."""
-        return cls(
-            a=float(x[0]),
-            b=float(x[1]),
-            rho=float(x[2]),
-            m=float(x[3]),
-            sigma=float(x[4]),
-        )
 
     @staticmethod
     def initial_guess(x: NDArray[np.float64], y: NDArray[np.float64]) -> NDArray[np.float64]:
