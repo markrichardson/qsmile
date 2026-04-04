@@ -29,7 +29,7 @@ with app.setup:
     import pandas as pd
     import plotly.graph_objects as go
 
-    from qsmile import SVIModel, SVIParams, fit
+    from qsmile import SVIModel, fit
     from qsmile.core.coords import XCoord, YCoord
     from qsmile.data.prices import OptionChain
 
@@ -308,7 +308,7 @@ def cell_14(p):
 @app.cell(hide_code=True)
 def cell_15(expiry, iv_fitted, k_fine, sl_a, sl_b, sl_m, sl_rho, sl_sigma):
     """Plot fitted vs explorer smile side by side."""
-    explorer_params = SVIParams(a=sl_a.value, b=sl_b.value, rho=sl_rho.value, m=sl_m.value, sigma=sl_sigma.value)
+    explorer_params = SVIModel(a=sl_a.value, b=sl_b.value, rho=sl_rho.value, m=sl_m.value, sigma=sl_sigma.value)
     iv_explorer = explorer_params.implied_vol(k_fine, expiry)
 
     fig_explore = go.Figure()
@@ -414,7 +414,7 @@ def cell_23():
         - **`SmileData.from_mid_vols`** — construct a validated smile container from mid IVs
         - **`fit`** — generic least-squares calibration of any `SmileModel`
         - **`SmileResult`** — fitted parameters, residuals, RMSE, and `evaluate(k)`
-        - **`SVIParams.evaluate` / `SVIParams.implied_vol`** — direct model evaluation
+        - **`SVIModel.evaluate` / `SVIModel.implied_vol`** — direct model evaluation
 
         ### Full Option Chain Pipeline
 

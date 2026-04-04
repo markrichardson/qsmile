@@ -6,14 +6,14 @@ import numpy as np
 
 from qsmile.data.vols import SmileData
 from qsmile.models.fitting import SmileResult, fit
-from qsmile.models.svi import SVIModel, SVIParams
+from qsmile.models.svi import SVIModel
 
 # Reusable known-good parameters for synthetic round-trip tests
-_TRUE_PARAMS = SVIParams(a=0.04, b=0.1, rho=-0.3, m=0.0, sigma=0.2)
+_TRUE_PARAMS = SVIModel(a=0.04, b=0.1, rho=-0.3, m=0.0, sigma=0.2)
 
 
 def _make_synthetic_sd(
-    params: SVIParams = _TRUE_PARAMS,
+    params: SVIModel = _TRUE_PARAMS,
     expiry: float = 0.5,
     forward: float = 100.0,
     n_strikes: int = 20,
@@ -55,7 +55,7 @@ class TestFitNoisyData:
     """Fit to market-like noisy data."""
 
     def test_noisy_fit_succeeds(self):
-        true_params = SVIParams(a=0.04, b=0.12, rho=-0.4, m=0.01, sigma=0.25)
+        true_params = SVIModel(a=0.04, b=0.12, rho=-0.4, m=0.01, sigma=0.25)
         expiry = 1.0
         strikes = np.linspace(80, 120, 15)
         forward = 100.0
@@ -78,7 +78,7 @@ class TestFitCustomInitialGuess:
 
     def test_custom_initial_params(self):
         sd = _make_synthetic_sd(n_strikes=12, strike_lo=85.0, strike_hi=115.0)
-        guess = SVIParams(a=0.03, b=0.08, rho=-0.2, m=0.01, sigma=0.15)
+        guess = SVIModel(a=0.03, b=0.08, rho=-0.2, m=0.01, sigma=0.15)
         result = fit(sd, SVIModel, initial_guess=guess)
 
         assert result.success
@@ -94,10 +94,10 @@ class TestSmileResult:
 
         assert result.residuals.shape == (10,)
         assert isinstance(result.rmse, float)
-        assert isinstance(result.params, SVIParams)
+        assert isinstance(result.params, SVIModel)
 
     def test_evaluate(self):
-        params = SVIParams(a=0.04, b=0.1, rho=-0.3, m=0.0, sigma=0.2)
+        params = SVIModel(a=0.04, b=0.1, rho=-0.3, m=0.0, sigma=0.2)
         result = SmileResult(
             params=params,
             residuals=np.zeros(5),

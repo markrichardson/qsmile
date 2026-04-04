@@ -88,7 +88,7 @@ sd_unit = sd_vols.transform(XCoord.StandardisedStrike, YCoord.TotalVariance)  # 
 
 # Fit SVI directly from SmileData
 result = fit(sd_vols, model=SVIModel)
-print(result.params)   # Fitted SVIParams
+print(result.params)   # Fitted SVIModel
 print(result.rmse)     # Root mean square error
 ```
 
@@ -106,7 +106,7 @@ sd = SmileData.from_mid_vols(
 )
 
 result = fit(sd, model=SVIModel)
-print(result.params)   # Fitted SVIParams
+print(result.params)   # Fitted SVIModel
 print(result.rmse)     # Root mean square error
 ```
 
@@ -140,8 +140,7 @@ SmileData.from_mid_vols(...)            ──→ SmileData ──────�
 | `fit(chain, model)` | Fit any `SmileModel` to `SmileData` — generic entry point |
 | `SmileModel` | Protocol for pluggable smile models (native coords, bounds, evaluate, etc.) |
 | `SmileResult` | Fitted result with `.params`, `.residuals`, `.rmse`, `.success`, `.evaluate(x)` |
-| `SVIModel` | SVI model definition — pass to `fit()` for native coords, bounds, and initial-guess heuristic |
-| `SVIParams` | SVI parameter values `(a, b, rho, m, sigma)` with `.evaluate(k)` and `.implied_vol(k, T)` |
+| `SVIModel` | SVI model and parameter values `(a, b, rho, m, sigma)` with `.evaluate(k)` and `.implied_vol(k, T)` |
 
 ### Black76 pricing
 

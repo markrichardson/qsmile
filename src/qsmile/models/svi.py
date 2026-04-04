@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import ClassVar, Self
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
@@ -11,14 +12,21 @@ from qsmile.core.coords import XCoord, YCoord
 
 
 @dataclass
-class SVIParams:
-    """Raw SVI parameter values.
+class SVIModel:
+    """Raw SVI parameterisation: model definition and fitted parameters.
 
     The SVI raw parameterisation models total implied variance as:
 
         w(k) = a + b * (rho * (k - m) + sqrt((k - m)^2 + sigma^2))
 
     where k = ln(K/F) is log-moneyness.
+
+    Pass this class to ``fit()`` as the model, and receive instances
+    back as fitted parameters::
+
+        result = fit(sd, model=SVIModel)
+        result.params          # → SVIModel instance
+        result.params.evaluate(k)
 
     Parameters
     ----------
@@ -39,6 +47,16 @@ class SVIParams:
     rho: float
     m: float
     sigma: float
+
+    # -- Class-level model metadata (excluded from dataclass fields) --
+
+    native_x_coord: ClassVar[XCoord] = XCoord.LogMoneynessStrike
+    native_y_coord: ClassVar[YCoord] = YCoord.TotalVariance
+    param_names: ClassVar[tuple[str, ...]] = ("a", "b", "rho", "m", "sigma")
+    bounds: ClassVar[tuple[list[float], list[float]]] = (
+        [-np.inf, 0.0, -0.999, -np.inf, 1e-8],
+        [np.inf, np.inf, 0.999, np.inf, np.inf],
+    )
 
     def __post_init__(self) -> None:
         """Validate SVI parameter constraints."""
@@ -83,32 +101,10 @@ class SVIParams:
         w = self.evaluate(k)
         return np.sqrt(w / expiry)
 
-
-class SVIModel:
-    """SVI model definition for use with ``fit()``.
-
-    Provides native coordinates, parameter bounds, serialisation,
-    and initial-guess heuristic. Pass this class (not an instance)
-    to ``fit()``::
-
-        result = fit(sd, model=SVIModel)
-        result.params  # → SVIParams with full type safety
-    """
-
-    Params = SVIParams
-
-    native_x_coord = XCoord.LogMoneynessStrike
-    native_y_coord = YCoord.TotalVariance
-    param_names = ("a", "b", "rho", "m", "sigma")
-    bounds = (
-        [-np.inf, 0.0, -0.999, -np.inf, 1e-8],
-        [np.inf, np.inf, 0.999, np.inf, np.inf],
-    )
-
-    @staticmethod
-    def from_array(x: NDArray[np.float64]) -> SVIParams:
-        """Reconstruct SVIParams from a flat array."""
-        return SVIParams(
+    @classmethod
+    def from_array(cls, x: NDArray[np.float64]) -> Self:
+        """Reconstruct an SVIModel from a flat parameter array."""
+        return cls(
             a=float(x[0]),
             b=float(x[1]),
             rho=float(x[2]),
