@@ -49,14 +49,15 @@ src/qsmile/data/meta.py         → tests/data/test_metadata.py
 src/qsmile/data/prices.py       → tests/data/test_prices.py
 src/qsmile/data/vols.py         → tests/data/test_vols.py
 src/qsmile/models/fitting.py    → tests/models/test_fitting.py
-src/qsmile/models/protocol.py   → tests/models/test_svi.py (protocol conformance tests live here)
+src/qsmile/models/protocol.py   → tests/models/test_abstract_smile_model.py, tests/models/test_svi.py (protocol conformance)
+src/qsmile/models/sabr.py       → tests/models/test_sabr.py, tests/models/test_sabr_fitting.py
 src/qsmile/models/svi.py        → tests/models/test_svi.py
 ```
 
 **Rules:**
 - Every source module in `src/qsmile/` MUST have a corresponding test file.
 - Test directories MUST mirror the `src/qsmile/` subpackage hierarchy (`tests/core/`, `tests/data/`, `tests/models/`).
-- Test files MUST import from the source module they cover (e.g. `from qsmile.models.svi import SVIParams`).
+- Test files MUST import from the source module they cover (e.g. `from qsmile.models.svi import SVIModel`).
 - Tests for a module MUST NOT live in a test file that maps to a different module — place them in the correct file.
 - Package `__init__.py` files do not require their own test files unless they contain non-trivial logic.
 
@@ -94,10 +95,7 @@ import numpy as np
 
 from qsmile.data.vols import SmileData
 from qsmile.models.fitting import SmileResult, fit
-from qsmile.models.svi import SVIParams
-
-# Default model instance for generic fit calls
-_SVI = SVIParams(a=0.0, b=0.01, rho=0.0, m=0.0, sigma=0.1)
+from qsmile.models.svi import SVIModel
 
 
 class TestFitSyntheticRoundTrip:
@@ -105,7 +103,7 @@ class TestFitSyntheticRoundTrip:
 
     def test_recover_known_params(self):
         # Arrange
-        true_params = SVIParams(a=0.04, b=0.1, rho=-0.3, m=0.0, sigma=0.2)
+        true_params = SVIModel(a=0.04, b=0.1, rho=-0.3, m=0.0, sigma=0.2)
         expiry = 0.5
         strikes = np.linspace(80, 120, 20)
         forward = 100.0
@@ -115,7 +113,7 @@ class TestFitSyntheticRoundTrip:
         sd = SmileData.from_mid_vols(strikes=strikes, ivs=ivs, forward=forward, expiry=expiry)
 
         # Act
-        result = fit(sd, _SVI)
+        result = fit(sd, SVIModel)
 
         # Assert
         assert result.success
@@ -236,7 +234,7 @@ uv run pytest --cov=src/qsmile --cov-report=term-missing
 ```python
 def test_total_variance_at_atm(self):
     """Test SVI total variance at the money (k=0)."""
-    params = SVIParams(a=0.04, b=0.1, rho=-0.3, m=0.0, sigma=0.2)
+    params = SVIModel(a=0.04, b=0.1, rho=-0.3, m=0.0, sigma=0.2)
     w = params.evaluate(np.array([0.0]))
     expected = params.a + params.b * (params.rho * 0 + np.sqrt(0 + params.sigma**2))
     np.testing.assert_allclose(w, expected)
@@ -256,8 +254,8 @@ def test_round_trip_transform(self):
 ### Testing Protocol Conformance
 ```python
 def test_isinstance_check(self):
-    """Test that SVIParams satisfies SmileModel protocol."""
-    p = SVIParams(a=0.04, b=0.1, rho=-0.3, m=0.0, sigma=0.2)
+    """Test that SVIModel satisfies SmileModel protocol."""
+    p = SVIModel(a=0.04, b=0.1, rho=-0.3, m=0.0, sigma=0.2)
     assert isinstance(p, SmileModel)
 ```
 
@@ -284,7 +282,7 @@ Tests for Black76 pricing functions:
 - Edge cases (deep ITM/OTM, zero vol)
 
 ### tests/models/test_svi.py
-Tests for SVIParams:
+Tests for SVIModel:
 - `evaluate(k)` matches the SVI formula
 - `implied_vol(k, T)` consistency with `evaluate`
 - Protocol conformance (`SmileModel`)

@@ -2,24 +2,29 @@
 
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass
+from typing import Any, Generic
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 from scipy.optimize import least_squares
 
 from qsmile.data.vols import SmileData
-from qsmile.models.protocol import SmileModel
+from qsmile.models.protocol import M, SmileModel
 
 
 @dataclass
-class SmileResult:
+class SmileResult(Generic[M]):
     """Result of a smile model fit.
+
+    Generic over ``M`` so that ``result.params`` preserves the
+    concrete model type (e.g. ``SVIModel``).
 
     Attributes:
     ----------
-    params : SmileModel
-        Fitted model instance.
+    params : M
+        Fitted parameter values.
     residuals : NDArray[np.float64]
         Per-observation residuals (model minus observed values in native coordinates).
     rmse : float
@@ -28,7 +33,7 @@ class SmileResult:
         Whether the optimiser converged.
     """
 
-    params: SmileModel
+    params: M
     residuals: NDArray[np.float64]
     rmse: float
     success: bool
@@ -38,23 +43,42 @@ class SmileResult:
         return self.params.evaluate(x)
 
 
+def _context_for_model(model: type[SmileModel], sd: SmileData) -> dict[str, Any]:
+    """Extract non-param context fields from SmileData for models that need them.
+
+    Compares the model's dataclass fields against ``param_names`` to find
+    context fields (e.g. ``expiry``, ``forward`` for SABR).  Values are
+    sourced from ``SmileData.metadata``.
+    """
+    if not dataclasses.is_dataclass(model):
+        return {}
+    all_field_names = {f.name for f in dataclasses.fields(model)}
+    context_fields = all_field_names - set(model.param_names)
+    context: dict[str, Any] = {}
+    for name in context_fields:
+        if hasattr(sd.metadata, name):
+            context[name] = getattr(sd.metadata, name)
+    return context
+
+
 def _residuals(
     x: NDArray[np.float64],
-    model: SmileModel,
+    model: type[SmileModel],
     x_obs: NDArray[np.float64],
     y_obs: NDArray[np.float64],
+    context: dict[str, Any],
 ) -> NDArray[np.float64]:
     """Residual function for least_squares: model - observed."""
-    fitted = model.from_array(x)
+    fitted = model.from_array(x, **context)
     y_model = np.asarray(fitted.evaluate(x_obs), dtype=np.float64)
     return y_model - y_obs
 
 
 def fit(
     chain: SmileData,
-    model: SmileModel,
-    initial_params: SmileModel | None = None,
-) -> SmileResult:
+    model: type[M],
+    initial_guess: M | None = None,
+) -> SmileResult[M]:
     """Fit a smile model to market data.
 
     Parameters
@@ -62,36 +86,37 @@ def fit(
     chain : SmileData
         Market data to fit. Uses mid values for fitting.
         Internally transforms to the model's native coordinates.
-    model : SmileModel
-        A model instance that defines native coordinates, bounds,
-        evaluation, and initial-guess heuristic.
-    initial_params : SmileModel, optional
-        Initial parameter guess (must be same model type).
-        If None, the model's heuristic initial guess is computed.
+    model : type[M]
+        A model class (e.g. ``SVIModel``) that defines native coordinates,
+        bounds, evaluation, and initial-guess heuristic.
+    initial_guess : M, optional
+        Initial parameter guess (e.g. an ``SVIModel(...)`` instance).
+        If None, the model's heuristic initial guess is computed from data.
 
     Returns:
     -------
-    SmileResult
+    SmileResult[M]
         Fitted parameters, residuals, RMSE, and convergence status.
     """
     sd = chain.transform(model.native_x_coord, model.native_y_coord)
     x_obs = sd.x
     y_obs = sd.y_mid
 
-    x0 = initial_params.to_array() if initial_params is not None else model.initial_guess(x_obs, y_obs)
+    x0 = initial_guess.to_array() if initial_guess is not None else model.initial_guess(x_obs, y_obs)
 
     lower, upper = model.bounds
+    context = _context_for_model(model, sd)
 
     result = least_squares(
         _residuals,
         x0,
-        args=(model, x_obs, y_obs),
+        args=(model, x_obs, y_obs, context),
         bounds=(lower, upper),
         method="trf",
         max_nfev=10_000,
     )
 
-    fitted_params = model.from_array(result.x)
+    fitted_params = model.from_array(result.x, **context)
     residuals = result.fun
     rmse = float(np.sqrt(np.mean(residuals**2)))
 

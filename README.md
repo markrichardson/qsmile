@@ -67,7 +67,7 @@ make install
 
 ```python +RHIZA_SKIP
 import numpy as np
-from qsmile import OptionChain, SmileData, SVIParams, XCoord, YCoord, fit
+from qsmile import OptionChain, SmileData, SVIModel, XCoord, YCoord, fit
 
 # Bid/ask prices — forward and DF are calibrated automatically
 prices = OptionChain(
@@ -87,8 +87,8 @@ sd_vols = sd.transform(XCoord.FixedStrike, YCoord.Volatility)    # → implied v
 sd_unit = sd_vols.transform(XCoord.StandardisedStrike, YCoord.TotalVariance)  # → unitised
 
 # Fit SVI directly from SmileData
-result = fit(sd_vols, SVIParams(a=0.0, b=0.01, rho=0.0, m=0.0, sigma=0.1))
-print(result.params)   # Fitted SVIParams
+result = fit(sd_vols, model=SVIModel)
+print(result.params)   # Fitted SVIModel
 print(result.rmse)     # Root mean square error
 ```
 
@@ -96,7 +96,7 @@ print(result.rmse)     # Root mean square error
 
 ```python +RHIZA_SKIP
 import numpy as np
-from qsmile import SmileData, SVIParams, fit
+from qsmile import SmileData, SVIModel, fit
 
 sd = SmileData.from_mid_vols(
     strikes=np.array([80, 90, 100, 110, 120], dtype=float),
@@ -105,8 +105,8 @@ sd = SmileData.from_mid_vols(
     expiry=0.5,
 )
 
-result = fit(sd, SVIParams(a=0.0, b=0.01, rho=0.0, m=0.0, sigma=0.1))
-print(result.params)   # Fitted SVIParams
+result = fit(sd, model=SVIModel)
+print(result.params)   # Fitted SVIModel
 print(result.rmse)     # Root mean square error
 ```
 
@@ -139,8 +139,10 @@ SmileData.from_mid_vols(...)            ──→ SmileData ──────�
 |---|---|
 | `fit(chain, model)` | Fit any `SmileModel` to `SmileData` — generic entry point |
 | `SmileModel` | Protocol for pluggable smile models (native coords, bounds, evaluate, etc.) |
+| `AbstractSmileModel` | Abstract base dataclass with default `to_array()`/`from_array()` derived from `param_names` |
 | `SmileResult` | Fitted result with `.params`, `.residuals`, `.rmse`, `.success`, `.evaluate(x)` |
-| `SVIParams` | SVI parameters `(a, b, rho, m, sigma)` — conforms to `SmileModel`, includes `.evaluate(k)` and `.implied_vol(k, T)` |
+| `SVIModel` | SVI model and parameter values `(a, b, rho, m, sigma)` with `.evaluate(k)` and `.implied_vol(k, T)` |
+| `SABRModel` | SABR model `(alpha, beta, rho, nu)` with Hagan (2002) lognormal implied vol `.evaluate(k)` |
 
 ### Black76 pricing
 

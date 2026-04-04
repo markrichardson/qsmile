@@ -3,22 +3,31 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import ClassVar
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 from qsmile.core.coords import XCoord, YCoord
+from qsmile.models.protocol import AbstractSmileModel
 
 
 @dataclass
-class SVIParams:
-    """Raw SVI parameters.
+class SVIModel(AbstractSmileModel):
+    """Raw SVI parameterisation: model definition and fitted parameters.
 
     The SVI raw parameterisation models total implied variance as:
 
         w(k) = a + b * (rho * (k - m) + sqrt((k - m)^2 + sigma^2))
 
     where k = ln(K/F) is log-moneyness.
+
+    Pass this class to ``fit()`` as the model, and receive instances
+    back as fitted parameters::
+
+        result = fit(sd, model=SVIModel)
+        result.params          # → SVIModel instance
+        result.params.evaluate(k)
 
     Parameters
     ----------
@@ -40,6 +49,16 @@ class SVIParams:
     m: float
     sigma: float
 
+    # -- Class-level model metadata (excluded from dataclass fields) --
+
+    native_x_coord: ClassVar[XCoord] = XCoord.LogMoneynessStrike
+    native_y_coord: ClassVar[YCoord] = YCoord.TotalVariance
+    param_names: ClassVar[tuple[str, ...]] = ("a", "b", "rho", "m", "sigma")
+    bounds: ClassVar[tuple[list[float], list[float]]] = (
+        [-np.inf, 0.0, -0.999, -np.inf, 1e-8],
+        [np.inf, np.inf, 0.999, np.inf, np.inf],
+    )
+
     def __post_init__(self) -> None:
         """Validate SVI parameter constraints."""
         if self.b < 0:
@@ -51,43 +70,6 @@ class SVIParams:
         if self.sigma <= 0:
             msg = f"sigma must be positive, got {self.sigma}"
             raise ValueError(msg)
-
-    @property
-    def native_x_coord(self) -> XCoord:
-        """SVI operates in log-moneyness space."""
-        return XCoord.LogMoneynessStrike
-
-    @property
-    def native_y_coord(self) -> YCoord:
-        """SVI models total implied variance."""
-        return YCoord.TotalVariance
-
-    @property
-    def param_names(self) -> tuple[str, ...]:
-        """Parameter names in array order."""
-        return ("a", "b", "rho", "m", "sigma")
-
-    @property
-    def bounds(self) -> tuple[list[float], list[float]]:
-        """Box constraints: a unbounded, b >= 0, -1 < rho < 1, m unbounded, sigma > 0."""
-        lower = [-np.inf, 0.0, -0.999, -np.inf, 1e-8]
-        upper = [np.inf, np.inf, 0.999, np.inf, np.inf]
-        return (lower, upper)
-
-    def to_array(self) -> NDArray[np.float64]:
-        """Pack parameters into a flat array."""
-        return np.array([self.a, self.b, self.rho, self.m, self.sigma])
-
-    @staticmethod
-    def from_array(x: NDArray[np.float64]) -> SVIParams:
-        """Reconstruct SVIParams from a flat array."""
-        return SVIParams(
-            a=float(x[0]),
-            b=float(x[1]),
-            rho=float(x[2]),
-            m=float(x[3]),
-            sigma=float(x[4]),
-        )
 
     def evaluate(self, x: ArrayLike) -> NDArray[np.float64] | np.float64:
         """Compute SVI total variance at the given log-moneyness values.

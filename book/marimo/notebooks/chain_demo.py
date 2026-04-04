@@ -31,7 +31,7 @@ with app.setup:
 
     from qsmile import (
         OptionChain,
-        SVIParams,
+        SVIModel,
         XCoord,
         YCoord,
         fit,
@@ -377,8 +377,7 @@ def cell_svi_intro():
 @app.cell
 def cell_svi_fit(sd):
     """Fit SVI directly from SmileData."""
-    _svi = SVIParams(a=0.0, b=0.01, rho=0.0, m=0.0, sigma=0.1)
-    result = fit(sd, _svi)
+    result = fit(sd, SVIModel)
     p = result.params
     return p, result
 
