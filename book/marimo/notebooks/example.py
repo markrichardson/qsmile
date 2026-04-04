@@ -29,7 +29,7 @@ with app.setup:
     import pandas as pd
     import plotly.graph_objects as go
 
-    from qsmile import SVIParams, fit
+    from qsmile import SVIModel, SVIParams, fit
     from qsmile.core.coords import XCoord, YCoord
     from qsmile.data.prices import OptionChain
 
@@ -151,8 +151,7 @@ def cell_08():
 @app.cell(hide_code=True)
 def cell_09(sd):
     """Fit SVI to the SmileData and display results."""
-    _svi = SVIParams(a=0.0, b=0.01, rho=0.0, m=0.0, sigma=0.1)
-    result = fit(sd, _svi)
+    result = fit(sd, SVIModel)
     p = result.params
 
     mo.vstack(

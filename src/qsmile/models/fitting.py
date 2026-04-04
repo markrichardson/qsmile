@@ -3,23 +3,27 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Generic
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 from scipy.optimize import least_squares
 
 from qsmile.data.vols import SmileData
-from qsmile.models.protocol import SmileModel
+from qsmile.models.protocol import P, SmileModel
 
 
 @dataclass
-class SmileResult:
+class SmileResult(Generic[P]):
     """Result of a smile model fit.
+
+    Generic over ``P`` so that ``result.params`` preserves the
+    concrete params type (e.g. ``SVIParams``).
 
     Attributes:
     ----------
-    params : SmileModel
-        Fitted model instance.
+    params : P
+        Fitted parameter values.
     residuals : NDArray[np.float64]
         Per-observation residuals (model minus observed values in native coordinates).
     rmse : float
@@ -28,7 +32,7 @@ class SmileResult:
         Whether the optimiser converged.
     """
 
-    params: SmileModel
+    params: P
     residuals: NDArray[np.float64]
     rmse: float
     success: bool
@@ -40,7 +44,7 @@ class SmileResult:
 
 def _residuals(
     x: NDArray[np.float64],
-    model: SmileModel,
+    model: type[SmileModel[P]],
     x_obs: NDArray[np.float64],
     y_obs: NDArray[np.float64],
 ) -> NDArray[np.float64]:
@@ -52,9 +56,9 @@ def _residuals(
 
 def fit(
     chain: SmileData,
-    model: SmileModel,
-    initial_params: SmileModel | None = None,
-) -> SmileResult:
+    model: type[SmileModel[P]],
+    initial_guess: P | None = None,
+) -> SmileResult[P]:
     """Fit a smile model to market data.
 
     Parameters
@@ -62,23 +66,23 @@ def fit(
     chain : SmileData
         Market data to fit. Uses mid values for fitting.
         Internally transforms to the model's native coordinates.
-    model : SmileModel
-        A model instance that defines native coordinates, bounds,
-        evaluation, and initial-guess heuristic.
-    initial_params : SmileModel, optional
-        Initial parameter guess (must be same model type).
-        If None, the model's heuristic initial guess is computed.
+    model : type[SmileModel[P]]
+        A model class (e.g. ``SVIModel``) that defines native coordinates,
+        bounds, evaluation, and initial-guess heuristic.
+    initial_guess : P, optional
+        Initial parameter guess (e.g. an ``SVIParams`` instance).
+        If None, the model's heuristic initial guess is computed from data.
 
     Returns:
     -------
-    SmileResult
+    SmileResult[P]
         Fitted parameters, residuals, RMSE, and convergence status.
     """
     sd = chain.transform(model.native_x_coord, model.native_y_coord)
     x_obs = sd.x
     y_obs = sd.y_mid
 
-    x0 = initial_params.to_array() if initial_params is not None else model.initial_guess(x_obs, y_obs)
+    x0 = initial_guess.to_array() if initial_guess is not None else model.initial_guess(x_obs, y_obs)
 
     lower, upper = model.bounds
 

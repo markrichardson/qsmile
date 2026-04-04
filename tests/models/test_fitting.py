@@ -6,10 +6,7 @@ import numpy as np
 
 from qsmile.data.vols import SmileData
 from qsmile.models.fitting import SmileResult, fit
-from qsmile.models.svi import SVIParams
-
-# Default SVI model instance for generic fit calls
-_SVI = SVIParams(a=0.0, b=0.01, rho=0.0, m=0.0, sigma=0.1)
+from qsmile.models.svi import SVIModel, SVIParams
 
 # Reusable known-good parameters for synthetic round-trip tests
 _TRUE_PARAMS = SVIParams(a=0.04, b=0.1, rho=-0.3, m=0.0, sigma=0.2)
@@ -35,7 +32,7 @@ class TestFitSyntheticRoundTrip:
 
     def test_recover_known_params(self):
         sd = _make_synthetic_sd()
-        result = fit(sd, _SVI)
+        result = fit(sd, SVIModel)
 
         assert result.success
         assert result.rmse < 1e-10
@@ -48,7 +45,7 @@ class TestFitSyntheticRoundTrip:
     def test_non_native_coords_accepted(self):
         """SmileData in (FixedStrike, Volatility) — non-native for SVI — still fits."""
         sd = _make_synthetic_sd()
-        result = fit(sd, _SVI)
+        result = fit(sd, SVIModel)
 
         assert result.success
         assert result.rmse < 1e-10
@@ -70,7 +67,7 @@ class TestFitNoisyData:
         ivs_noisy = ivs_clean + noise
 
         sd = SmileData.from_mid_vols(strikes=strikes, ivs=ivs_noisy, forward=forward, expiry=expiry)
-        result = fit(sd, _SVI)
+        result = fit(sd, SVIModel)
 
         assert result.success
         assert result.rmse < 0.01
@@ -82,7 +79,7 @@ class TestFitCustomInitialGuess:
     def test_custom_initial_params(self):
         sd = _make_synthetic_sd(n_strikes=12, strike_lo=85.0, strike_hi=115.0)
         guess = SVIParams(a=0.03, b=0.08, rho=-0.2, m=0.01, sigma=0.15)
-        result = fit(sd, guess, initial_params=guess)
+        result = fit(sd, SVIModel, initial_guess=guess)
 
         assert result.success
         assert result.rmse < 1e-6
@@ -93,7 +90,7 @@ class TestSmileResult:
 
     def test_residuals_shape(self):
         sd = _make_synthetic_sd(n_strikes=10, strike_lo=85.0, strike_hi=115.0)
-        result = fit(sd, _SVI)
+        result = fit(sd, SVIModel)
 
         assert result.residuals.shape == (10,)
         assert isinstance(result.rmse, float)
@@ -114,7 +111,7 @@ class TestSmileResult:
 
     def test_fitted_params_within_bounds(self):
         sd = _make_synthetic_sd()
-        result = fit(sd, _SVI)
+        result = fit(sd, SVIModel)
 
         assert result.params.b >= 0
         assert -1 < result.params.rho < 1

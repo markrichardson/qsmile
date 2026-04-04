@@ -12,7 +12,7 @@ from qsmile.core.coords import XCoord, YCoord
 
 @dataclass
 class SVIParams:
-    """Raw SVI parameters.
+    """Raw SVI parameter values.
 
     The SVI raw parameterisation models total implied variance as:
 
@@ -52,42 +52,9 @@ class SVIParams:
             msg = f"sigma must be positive, got {self.sigma}"
             raise ValueError(msg)
 
-    @property
-    def native_x_coord(self) -> XCoord:
-        """SVI operates in log-moneyness space."""
-        return XCoord.LogMoneynessStrike
-
-    @property
-    def native_y_coord(self) -> YCoord:
-        """SVI models total implied variance."""
-        return YCoord.TotalVariance
-
-    @property
-    def param_names(self) -> tuple[str, ...]:
-        """Parameter names in array order."""
-        return ("a", "b", "rho", "m", "sigma")
-
-    @property
-    def bounds(self) -> tuple[list[float], list[float]]:
-        """Box constraints: a unbounded, b >= 0, -1 < rho < 1, m unbounded, sigma > 0."""
-        lower = [-np.inf, 0.0, -0.999, -np.inf, 1e-8]
-        upper = [np.inf, np.inf, 0.999, np.inf, np.inf]
-        return (lower, upper)
-
     def to_array(self) -> NDArray[np.float64]:
         """Pack parameters into a flat array."""
         return np.array([self.a, self.b, self.rho, self.m, self.sigma])
-
-    @staticmethod
-    def from_array(x: NDArray[np.float64]) -> SVIParams:
-        """Reconstruct SVIParams from a flat array."""
-        return SVIParams(
-            a=float(x[0]),
-            b=float(x[1]),
-            rho=float(x[2]),
-            m=float(x[3]),
-            sigma=float(x[4]),
-        )
 
     def evaluate(self, x: ArrayLike) -> NDArray[np.float64] | np.float64:
         """Compute SVI total variance at the given log-moneyness values.
@@ -115,6 +82,39 @@ class SVIParams:
             raise ValueError(msg)
         w = self.evaluate(k)
         return np.sqrt(w / expiry)
+
+
+class SVIModel:
+    """SVI model definition for use with ``fit()``.
+
+    Provides native coordinates, parameter bounds, serialisation,
+    and initial-guess heuristic. Pass this class (not an instance)
+    to ``fit()``::
+
+        result = fit(sd, model=SVIModel)
+        result.params  # → SVIParams with full type safety
+    """
+
+    Params = SVIParams
+
+    native_x_coord = XCoord.LogMoneynessStrike
+    native_y_coord = YCoord.TotalVariance
+    param_names = ("a", "b", "rho", "m", "sigma")
+    bounds = (
+        [-np.inf, 0.0, -0.999, -np.inf, 1e-8],
+        [np.inf, np.inf, 0.999, np.inf, np.inf],
+    )
+
+    @staticmethod
+    def from_array(x: NDArray[np.float64]) -> SVIParams:
+        """Reconstruct SVIParams from a flat array."""
+        return SVIParams(
+            a=float(x[0]),
+            b=float(x[1]),
+            rho=float(x[2]),
+            m=float(x[3]),
+            sigma=float(x[4]),
+        )
 
     @staticmethod
     def initial_guess(x: NDArray[np.float64], y: NDArray[np.float64]) -> NDArray[np.float64]:

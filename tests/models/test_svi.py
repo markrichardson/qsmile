@@ -6,8 +6,8 @@ import numpy as np
 import pytest
 
 from qsmile.core.coords import XCoord, YCoord
-from qsmile.models.protocol import SmileModel
-from qsmile.models.svi import SVIParams
+from qsmile.models.protocol import SmileParams
+from qsmile.models.svi import SVIModel, SVIParams
 
 
 class TestSVIParams:
@@ -89,31 +89,33 @@ class TestSVIImpliedVol:
 
 
 class TestSVIParamsProtocol:
-    """SVIParams satisfies the SmileModel protocol."""
+    """SVIParams satisfies the SmileParams protocol."""
 
     def test_isinstance_check(self):
         p = SVIParams(a=0.04, b=0.1, rho=-0.3, m=0.0, sigma=0.2)
-        assert isinstance(p, SmileModel)
+        assert isinstance(p, SmileParams)
 
     def test_round_trip_serialisation(self):
         p = SVIParams(a=0.04, b=0.1, rho=-0.3, m=0.0, sigma=0.2)
         arr = p.to_array()
-        recovered = SVIParams.from_array(arr)
+        recovered = SVIModel.from_array(arr)
         np.testing.assert_allclose(recovered.to_array(), p.to_array())
 
+
+class TestSVIModel:
+    """SVIModel provides model-level metadata."""
+
     def test_bounds_length_matches_param_names(self):
-        p = SVIParams(a=0.04, b=0.1, rho=-0.3, m=0.0, sigma=0.2)
-        lower, upper = p.bounds
-        assert len(lower) == len(p.param_names)
-        assert len(upper) == len(p.param_names)
+        lower, upper = SVIModel.bounds
+        assert len(lower) == len(SVIModel.param_names)
+        assert len(upper) == len(SVIModel.param_names)
 
     def test_native_coords(self):
-        p = SVIParams(a=0.04, b=0.1, rho=-0.3, m=0.0, sigma=0.2)
-        assert p.native_x_coord == XCoord.LogMoneynessStrike
-        assert p.native_y_coord == YCoord.TotalVariance
+        assert SVIModel.native_x_coord == XCoord.LogMoneynessStrike
+        assert SVIModel.native_y_coord == YCoord.TotalVariance
 
     def test_initial_guess_length(self):
         k = np.linspace(-0.2, 0.2, 10)
         w = 0.04 + 0.1 * np.sqrt(k**2 + 0.04)
-        guess = SVIParams.initial_guess(k, w)
+        guess = SVIModel.initial_guess(k, w)
         assert len(guess) == 5

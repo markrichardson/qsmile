@@ -94,10 +94,7 @@ import numpy as np
 
 from qsmile.data.vols import SmileData
 from qsmile.models.fitting import SmileResult, fit
-from qsmile.models.svi import SVIParams
-
-# Default model instance for generic fit calls
-_SVI = SVIParams(a=0.0, b=0.01, rho=0.0, m=0.0, sigma=0.1)
+from qsmile.models.svi import SVIModel, SVIParams
 
 
 class TestFitSyntheticRoundTrip:
@@ -115,7 +112,7 @@ class TestFitSyntheticRoundTrip:
         sd = SmileData.from_mid_vols(strikes=strikes, ivs=ivs, forward=forward, expiry=expiry)
 
         # Act
-        result = fit(sd, _SVI)
+        result = fit(sd, SVIModel)
 
         # Assert
         assert result.success
