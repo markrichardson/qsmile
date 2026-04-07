@@ -70,6 +70,7 @@ class TestSmileDataPlot:
 class TestPricesPlot:
     def test_returns_figure(self):
         from qsmile.core.black76 import black76_call, black76_put
+        from qsmile.data.meta import SmileMetadata
         from qsmile.data.prices import OptionChain
 
         strikes = np.array([90.0, 100.0, 110.0])
@@ -83,9 +84,7 @@ class TestPricesPlot:
             call_ask=call_mid + 0.1,
             put_bid=put_mid - 0.1,
             put_ask=put_mid + 0.1,
-            expiry=T,
-            forward=F,
-            discount_factor=D,
+            metadata=SmileMetadata(expiry=T, forward=F, discount_factor=D),
         )
         import matplotlib.figure
 

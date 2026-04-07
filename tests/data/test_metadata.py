@@ -21,6 +21,20 @@ class TestSmileMetadataConstruction:
         meta = SmileMetadata(forward=100.0, discount_factor=0.99, expiry=0.25)
         assert meta.sigma_atm is None
 
+    def test_with_only_expiry(self) -> None:
+        meta = SmileMetadata(expiry=0.25)
+        assert meta.forward is None
+        assert meta.discount_factor is None
+        assert meta.sigma_atm is None
+
+    def test_none_forward_accepted(self) -> None:
+        meta = SmileMetadata(expiry=0.25, discount_factor=0.99)
+        assert meta.forward is None
+
+    def test_none_discount_factor_accepted(self) -> None:
+        meta = SmileMetadata(expiry=0.25, forward=100.0)
+        assert meta.discount_factor is None
+
 
 class TestSmileMetadataValidation:
     def test_non_positive_forward(self) -> None:

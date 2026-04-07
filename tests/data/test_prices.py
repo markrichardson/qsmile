@@ -7,6 +7,7 @@ import pytest
 
 from qsmile.core.black76 import black76_call, black76_put
 from qsmile.core.coords import XCoord, YCoord
+from qsmile.data.meta import SmileMetadata
 from qsmile.data.prices import OptionChain, _calibrate_forward_df, delta_blend_ivols
 
 
@@ -42,9 +43,7 @@ def _make_prices(
         "call_ask": call_ask,
         "put_bid": put_bid,
         "put_ask": put_ask,
-        "expiry": expiry,
-        "forward": forward,
-        "discount_factor": discount_factor,
+        "metadata": SmileMetadata(expiry=expiry, forward=forward, discount_factor=discount_factor),
     }
 
 
@@ -53,8 +52,8 @@ class TestOptionChainConstruction:
         data = _make_prices()
         chain = OptionChain(**data)
         assert isinstance(chain.strikes, np.ndarray)
-        assert chain.forward == 100.0
-        assert chain.discount_factor == 0.98
+        assert chain.metadata.forward == 100.0
+        assert chain.metadata.discount_factor == 0.98
 
     def test_from_lists(self):
         data = _make_prices()
@@ -64,9 +63,7 @@ class TestOptionChainConstruction:
             call_ask=list(data["call_ask"]),
             put_bid=list(data["put_bid"]),
             put_ask=list(data["put_ask"]),
-            expiry=data["expiry"],
-            forward=data["forward"],
-            discount_factor=data["discount_factor"],
+            metadata=data["metadata"],
         )
         assert chain.strikes.dtype == np.float64
 
@@ -99,7 +96,7 @@ class TestOptionChainValidation:
     def test_non_positive_expiry(self):
         data = _make_prices()
         with pytest.raises(ValueError, match="expiry must be positive"):
-            OptionChain(**{**data, "expiry": 0.0})
+            OptionChain(**{**data, "metadata": SmileMetadata(expiry=0.0, forward=100.0, discount_factor=0.98)})
 
     def test_fewer_than_three_strikes(self):
         with pytest.raises(ValueError, match="at least 3"):
@@ -109,9 +106,7 @@ class TestOptionChainValidation:
                 call_ask=[6.0, 3.0],
                 put_bid=[2.0, 5.0],
                 put_ask=[3.0, 6.0],
-                expiry=0.5,
-                forward=100.0,
-                discount_factor=1.0,
+                metadata=SmileMetadata(expiry=0.5, forward=100.0, discount_factor=1.0),
             )
 
 
@@ -144,10 +139,10 @@ class TestCalibration:
             call_ask=data["call_ask"],
             put_bid=data["put_bid"],
             put_ask=data["put_ask"],
-            expiry=data["expiry"],
+            metadata=SmileMetadata(expiry=data["metadata"].expiry),
         )
-        assert chain.forward == pytest.approx(100.0, rel=1e-3)
-        assert chain.discount_factor == pytest.approx(0.98, rel=1e-2)
+        assert chain.metadata.forward == pytest.approx(100.0, rel=1e-3)
+        assert chain.metadata.discount_factor == pytest.approx(0.98, rel=1e-2)
 
 
 class TestMidPrices:
@@ -243,7 +238,7 @@ class TestDenoise:
         chain = OptionChain(**data)
         clean = chain.filter()
         # Forward should still be approximately correct
-        assert clean.forward == pytest.approx(data["forward"], rel=1e-2)
+        assert clean.metadata.forward == pytest.approx(data["metadata"].forward, rel=1e-2)
 
     def test_at_least_three_strikes_remain(self):
         """Denoise on a chain that's too noisy should still produce ≥3 strikes."""
@@ -279,8 +274,8 @@ class TestDenoise:
         """
         data = _make_prices()
         chain = OptionChain(**data)
-        F = chain.forward
-        D = chain.discount_factor
+        F = chain.metadata.forward
+        D = chain.metadata.discount_factor
         # Pick a deep ITM put (high strike)
         bad_idx = -1
         K = data["strikes"][bad_idx]
@@ -297,8 +292,8 @@ class TestDenoise:
         """Strike where call bid < D*(F-K) intrinsic should be removed."""
         data = _make_prices()
         chain = OptionChain(**data)
-        F = chain.forward
-        D = chain.discount_factor
+        F = chain.metadata.forward
+        D = chain.metadata.discount_factor
         # Pick a deep ITM call (low strike)
         bad_idx = 0
         K = data["strikes"][bad_idx]
@@ -432,7 +427,7 @@ class TestToSmileDataBlended:
         sd = chain.to_smile_data()
         assert sd.metadata.forward == pytest.approx(100.0, rel=1e-3)
         assert sd.metadata.discount_factor == pytest.approx(0.98, rel=1e-2)
-        assert sd.metadata.expiry == data["expiry"]
+        assert sd.metadata.expiry == data["metadata"].expiry
 
     def test_bid_ask_preserved(self):
         data = _make_prices(vol=0.25, spread=0.01)
@@ -547,16 +542,14 @@ class TestOptionChainToSmileData:
             call_ask=call_ask,
             put_bid=put_bid,
             put_ask=put_ask,
-            expiry=expiry,
-            forward=forward,
-            discount_factor=discount_factor,
+            metadata=SmileMetadata(expiry=expiry, forward=forward, discount_factor=discount_factor),
         )
         sd = prices.to_smile_data()
         assert sd.x_coord == XCoord.FixedStrike
         assert sd.y_coord == YCoord.Volatility
-        assert sd.metadata.forward == prices.forward
-        assert sd.metadata.discount_factor == prices.discount_factor
-        assert sd.metadata.expiry == prices.expiry
+        assert sd.metadata.forward == prices.metadata.forward
+        assert sd.metadata.discount_factor == prices.metadata.discount_factor
+        assert sd.metadata.expiry == prices.metadata.expiry
 
 
 # --- Tests for volume / open_interest on OptionChain ---

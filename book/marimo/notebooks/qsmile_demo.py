@@ -33,6 +33,7 @@ with app.setup:
     from qsmile import (
         OptionChain,
         SABRModel,
+        SmileMetadata,
         SVIModel,
         XCoord,
         YCoord,
@@ -213,7 +214,7 @@ def cell_build_chain(
         call_ask=call_ask,
         put_bid=put_bid,
         put_ask=put_ask,
-        expiry=expiry,
+        metadata=SmileMetadata(expiry=expiry),
         volume=volume,
         open_interest=oi,
     )
@@ -226,8 +227,8 @@ def cell_build_chain(
     |----------|------:|
     | Strikes loaded | {len(strikes)} |
     | Expiry | {expiry:.4f} yr ({expiry * 365:.0f} days) |
-    | Forward $F$ | {chain_raw.forward:,.2f} |
-    | Discount factor $D$ | {chain_raw.discount_factor:.6f} |
+    | Forward $F$ | {chain_raw.metadata.forward:,.2f} |
+    | Discount factor $D$ | {chain_raw.metadata.discount_factor:.6f} |
     """
     )
     return (chain_raw,)
