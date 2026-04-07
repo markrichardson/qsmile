@@ -274,33 +274,6 @@ class OptionChain:
         return (self.put_bid + self.put_ask) / 2.0
 
     def to_smile_data(self) -> SmileData:
-        """Convert to a SmileData with (FixedStrike, Price) coordinates.
-
-        Uses call mid-market prices as the Y-values.
-        """
-        from qsmile.core.coords import XCoord, YCoord
-        from qsmile.data.meta import SmileMetadata
-        from qsmile.data.vols import SmileData
-
-        assert self.forward is not None  # noqa: S101
-        assert self.discount_factor is not None  # noqa: S101
-
-        return SmileData(
-            x=self.strikes.copy(),
-            y_bid=self.call_bid.copy(),
-            y_ask=self.call_ask.copy(),
-            x_coord=XCoord.FixedStrike,
-            y_coord=YCoord.Price,
-            metadata=SmileMetadata(
-                forward=self.forward,
-                discount_factor=self.discount_factor,
-                expiry=self.expiry,
-            ),
-            volume=self.volume.copy() if self.volume is not None else None,
-            open_interest=self.open_interest.copy() if self.open_interest is not None else None,
-        )
-
-    def to_smile_data_blended(self) -> SmileData:
         """Convert to a SmileData with (FixedStrike, Volatility) using delta-blended vols.
 
         Inverts both call and put prices to implied vols at every strike, then
@@ -382,7 +355,7 @@ class OptionChain:
             open_interest=self.open_interest[valid] if self.open_interest is not None else None,
         )
 
-    def denoise(self) -> OptionChain:
+    def filter(self) -> OptionChain:
         """Return a cleaned copy with stale and implausible quotes removed.
 
         Applies five filters in sequence:

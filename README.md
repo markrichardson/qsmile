@@ -82,12 +82,11 @@ print(prices.forward)          # Calibrated forward
 print(prices.discount_factor)  # Calibrated discount factor
 
 # Enter the coordinate transform framework
-sd = prices.to_smile_data()                                      # (FixedStrike, Price)
-sd_vols = sd.transform(XCoord.FixedStrike, YCoord.Volatility)    # → implied vols
-sd_unit = sd_vols.transform(XCoord.StandardisedStrike, YCoord.TotalVariance)  # → unitised
+sd = prices.to_smile_data()                               # (FixedStrike, Volatility)
+sd_unit = sd.transform(XCoord.StandardisedStrike, YCoord.TotalVariance)  # → unitised
 
 # Fit SVI directly from SmileData
-result = fit(sd_vols, model=SVIModel)
+result = fit(sd, model=SVIModel)
 print(result.params)   # Fitted SVIModel
 print(result.rmse)     # Root mean square error
 ```

@@ -57,8 +57,8 @@ def cell_intro():
         |---|-------|------------------------|
         | 1 | **Black-76** | `black76_call`, `black76_put`, `black76_implied_vol` |
         | 2 | **Option chain** | `OptionChain` — auto-calibrates $F$, $D$ from put-call parity |
-        | 3 | **Denoising** | `OptionChain.denoise()` — 5-filter cleaning pipeline |
-        | 4 | **SmileData** | `to_smile_data()`, `to_smile_data_blended()`, coordinate transforms |
+        | 3 | **Denoising** | `OptionChain.filter()` — 5-filter cleaning pipeline |
+        | 4 | **SmileData** | `to_smile_data()`, coordinate transforms |
         | 5 | **Model fitting** | `fit(sd, SVIModel)`, `fit(sd, SABRModel)` |
         | 6 | **Ancillary** | volume / open interest passthrough, `SmileData.plot()` |
         """
@@ -268,14 +268,14 @@ def cell_chain_plot(chain_raw):
 
 
 @app.cell(hide_code=True)
-def cell_denoise_intro():
+def cell_filter_intro():
     """Introduce the denoising section."""
     mo.md(
         r"""
         ---
         ## 3 · Denoising
 
-        `OptionChain.denoise()` applies five sequential filters to remove
+        `OptionChain.filter()` applies five sequential filters to remove
         arbitrageable or noisy quotes:
 
         1. **Zero-bid** — remove strikes where either bid is zero
@@ -289,9 +289,9 @@ def cell_denoise_intro():
 
 
 @app.cell(hide_code=True)
-def cell_denoise(chain_raw):
+def cell_filter(chain_raw):
     """Denoise the option chain."""
-    chain = chain_raw.denoise()
+    chain = chain_raw.filter()
 
     mo.md(
         f"""
@@ -317,9 +317,8 @@ def cell_sd_intro():
         ---
         ## 4 · SmileData & Coordinate Transforms
 
-        `.to_smile_data()` produces **(FixedStrike, Price)** coordinates.
-        `.to_smile_data_blended()` delta-blends call/put implied vols into
-        **(FixedStrike, Volatility)**.
+        `.to_smile_data()` delta-blends call/put implied vols into
+        **(FixedStrike, Volatility)** using Black-76 call-delta weights.
 
         From there, `.transform(x, y)` moves freely between any combination:
 
@@ -344,8 +343,7 @@ def cell_sd_intro():
 @app.cell(hide_code=True)
 def cell_smile_data(chain):
     """Create SmileData in price and vol coordinates."""
-    sd_prices = chain.to_smile_data()
-    sd_vols = chain.to_smile_data_blended()
+    sd_vols = chain.to_smile_data()
 
     mo.md(
         f"""
@@ -353,7 +351,6 @@ def cell_smile_data(chain):
 
     | Container | X coord | Y coord | Points |
     |-----------|---------|---------|-------:|
-    | `sd_prices` | {sd_prices.x_coord.name} | {sd_prices.y_coord.name} | {len(sd_prices.x)} |
     | `sd_vols` | {sd_vols.x_coord.name} | {sd_vols.y_coord.name} | {len(sd_vols.x)} |
     | Volume attached | {"Yes" if sd_vols.volume is not None else "No"} |
     | Open interest attached | {"Yes" if sd_vols.open_interest is not None else "No"} |
@@ -364,14 +361,6 @@ def cell_smile_data(chain):
     """
     )
     return (sd_vols,)
-
-
-app._unparsable_cell(
-    r"""
-    sd_prices.
-    """,
-    name="_",
-)
 
 
 @app.cell(hide_code=True)
@@ -661,8 +650,8 @@ def cell_vol_oi_intro():
         ## 7 · Volume & Open Interest Passthrough
 
         Optional `volume` and `open_interest` arrays flow through the
-        entire pipeline — from `OptionChain` through `denoise()`,
-        `to_smile_data()` / `to_smile_data_blended()`, and
+        entire pipeline — from `OptionChain` through `filter()`,
+        `to_smile_data()`, and
         `SmileData.transform()`.
         """
     )
@@ -672,7 +661,7 @@ def cell_vol_oi_intro():
 @app.cell(hide_code=True)
 def cell_vol_oi_demo(chain):
     """Show volume / OI surviving the pipeline."""
-    sd_with_vol = chain.to_smile_data_blended()
+    sd_with_vol = chain.to_smile_data()
     sd_transformed = sd_with_vol.transform(XCoord.LogMoneynessStrike, YCoord.TotalVariance)
 
     _fig = make_subplots(
@@ -723,7 +712,7 @@ def cell_vol_oi_demo(chain):
     | Pipeline stage | Volume? | OI? |
     |----------------|:-------:|:---:|
     | `OptionChain` (raw) | {_vol(chain)} | {_oi(chain)} |
-    | `to_smile_data_blended()` | {_vol(sd_with_vol)} | {_oi(sd_with_vol)} |
+    | `to_smile_data()` | {_vol(sd_with_vol)} | {_oi(sd_with_vol)} |
     | `transform(LogMoneyness, TotalVar)` | {_vol(sd_transformed)} | {_oi(sd_transformed)} |
     """
             ),
@@ -767,9 +756,9 @@ def cell_summary():
         |------|-----|-------------|
         | Pricing | `black76_call / put / implied_vol` | European option pricing & inversion |
         | Load | `OptionChain(...)` | Stores bid/ask + auto-calibrates $F$, $D$ |
-        | Clean | `.denoise()` | 5-filter arbitrage removal |
-        | Transform | `.to_smile_data().transform(x, y)` | Any $(X, Y)$ coordinate pair |
-        | Blend | `.to_smile_data_blended()` | Delta-blended implied vols |
+        | Clean | `.filter()` | 5-filter arbitrage removal |
+        | Convert | `.to_smile_data()` | Delta-blended implied vols |
+        | Transform | `.transform(x, y)` | Any $(X, Y)$ coordinate pair |
         | Fit | `fit(sd, SVIModel)` / `fit(sd, SABRModel)` | Parametric smile fit |
         | Ancillary | `volume`, `open_interest` | Optional data carried through pipeline |
         | Visualise | `.plot()` | Built-in matplotlib rendering |

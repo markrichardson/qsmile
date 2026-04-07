@@ -90,13 +90,13 @@ The system SHALL accept an optional `open_interest` parameter of type `NDArray[n
 - **WHEN** any value in `open_interest` is negative
 - **THEN** the system SHALL raise a `ValueError`
 
-### Requirement: OptionChain denoise preserves volume and open interest
-The `denoise()` method SHALL propagate `volume` and `open_interest` arrays to the returned `OptionChain`, subsetting them with the same mask used to filter strikes. If the source arrays are `None`, the returned chain's arrays SHALL also be `None`.
+### Requirement: OptionChain filter preserves volume and open interest
+The `filter()` method SHALL propagate `volume` and `open_interest` arrays to the returned `OptionChain`, subsetting them with the same mask used to filter strikes. If the source arrays are `None`, the returned chain's arrays SHALL also be `None`.
 
 #### Scenario: Denoise subsets volume and open interest
-- **WHEN** `denoise()` is called on an `OptionChain` with `volume` and `open_interest`
+- **WHEN** `filter()` is called on an `OptionChain` with `volume` and `open_interest`
 - **THEN** the returned chain's `volume` and `open_interest` SHALL contain only the entries corresponding to the surviving strikes
 
 #### Scenario: Denoise with None volume and open interest
-- **WHEN** `denoise()` is called on an `OptionChain` where `volume` and `open_interest` are `None`
+- **WHEN** `filter()` is called on an `OptionChain` where `volume` and `open_interest` are `None`
 - **THEN** the returned chain's `volume` and `open_interest` SHALL be `None`
