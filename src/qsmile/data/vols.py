@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -47,6 +47,8 @@ class SmileData:
     x_coord: XCoord
     y_coord: YCoord
     metadata: SmileMetadata
+    volume: NDArray[np.float64] | None = field(default=None)
+    open_interest: NDArray[np.float64] | None = field(default=None)
 
     def __post_init__(self) -> None:
         """Validate and convert inputs."""
@@ -78,6 +80,18 @@ class SmileData:
         ):
             msg = f"y values must be non-negative for {self.y_coord.name}"
             raise ValueError(msg)
+
+        for attr in ("volume", "open_interest"):
+            arr = getattr(self, attr)
+            if arr is not None:
+                arr = np.asarray(arr, dtype=np.float64)
+                setattr(self, attr, arr)
+                if len(arr) != n:
+                    msg = f"{attr} must have the same length as x ({n}), got {len(arr)}"
+                    raise ValueError(msg)
+                if np.any(arr < 0):
+                    msg = f"{attr} must be non-negative"
+                    raise ValueError(msg)
 
     @property
     def y_mid(self) -> NDArray[np.float64]:
@@ -122,6 +136,8 @@ class SmileData:
             x_coord=target_x,
             y_coord=target_y,
             metadata=metadata,
+            volume=self.volume.copy() if self.volume is not None else None,
+            open_interest=self.open_interest.copy() if self.open_interest is not None else None,
         )
 
     @classmethod

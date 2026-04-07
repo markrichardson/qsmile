@@ -194,6 +194,8 @@ class OptionChain:
     expiry: float
     forward: float | None = field(default=None)
     discount_factor: float | None = field(default=None)
+    volume: NDArray[np.float64] | None = field(default=None)
+    open_interest: NDArray[np.float64] | None = field(default=None)
 
     def __post_init__(self) -> None:
         """Validate and convert inputs, calibrate forward/DF if needed."""
@@ -241,6 +243,18 @@ class OptionChain:
             msg = "put_bid must not exceed put_ask"
             raise ValueError(msg)
 
+        for attr in ("volume", "open_interest"):
+            arr = getattr(self, attr)
+            if arr is not None:
+                arr = np.asarray(arr, dtype=np.float64)
+                setattr(self, attr, arr)
+                if len(arr) != n:
+                    msg = f"{attr} must have the same length as strikes ({n}), got {len(arr)}"
+                    raise ValueError(msg)
+                if np.any(arr < 0):
+                    msg = f"{attr} must be non-negative"
+                    raise ValueError(msg)
+
         # Calibrate forward and discount factor if not provided
         if self.forward is None or self.discount_factor is None:
             f_cal, d_cal = _calibrate_forward_df(self.strikes, self.call_mid, self.put_mid)
@@ -282,6 +296,8 @@ class OptionChain:
                 discount_factor=self.discount_factor,
                 expiry=self.expiry,
             ),
+            volume=self.volume.copy() if self.volume is not None else None,
+            open_interest=self.open_interest.copy() if self.open_interest is not None else None,
         )
 
     def to_smile_data_blended(self) -> SmileData:
@@ -362,6 +378,8 @@ class OptionChain:
                 expiry=self.expiry,
                 sigma_atm=sigma_atm,
             ),
+            volume=self.volume[valid] if self.volume is not None else None,
+            open_interest=self.open_interest[valid] if self.open_interest is not None else None,
         )
 
     def denoise(self) -> OptionChain:
@@ -476,6 +494,8 @@ class OptionChain:
             put_bid=self.put_bid[keep],
             put_ask=self.put_ask[keep],
             expiry=self.expiry,
+            volume=self.volume[keep] if self.volume is not None else None,
+            open_interest=self.open_interest[keep] if self.open_interest is not None else None,
             # Re-calibrate forward/DF on the clean data
         )
 

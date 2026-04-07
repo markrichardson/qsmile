@@ -532,3 +532,110 @@ class TestOptionChainToSmileData:
         assert sd.metadata.forward == prices.forward
         assert sd.metadata.discount_factor == prices.discount_factor
         assert sd.metadata.expiry == prices.expiry
+
+
+# --- Tests for volume / open_interest on OptionChain ---
+
+
+class TestOptionChainVolumeOpenInterest:
+    def test_default_none(self):
+        data = _make_prices()
+        chain = OptionChain(**data)
+        assert chain.volume is None
+        assert chain.open_interest is None
+
+    def test_with_volume_and_open_interest(self):
+        data = _make_prices()
+        vol = np.arange(1.0, len(data["strikes"]) + 1)
+        oi = np.arange(100.0, 100.0 + len(data["strikes"]))
+        chain = OptionChain(**data, volume=vol, open_interest=oi)
+        np.testing.assert_array_equal(chain.volume, vol)
+        np.testing.assert_array_equal(chain.open_interest, oi)
+
+    def test_coerced_to_float64(self):
+        data = _make_prices()
+        n = len(data["strikes"])
+        chain = OptionChain(**data, volume=list(range(n)), open_interest=list(range(n)))
+        assert chain.volume.dtype == np.float64
+        assert chain.open_interest.dtype == np.float64
+
+    def test_volume_length_mismatch(self):
+        data = _make_prices()
+        with pytest.raises(ValueError, match="volume must have the same length"):
+            OptionChain(**data, volume=np.array([1.0, 2.0]))
+
+    def test_open_interest_length_mismatch(self):
+        data = _make_prices()
+        with pytest.raises(ValueError, match="open_interest must have the same length"):
+            OptionChain(**data, open_interest=np.array([1.0]))
+
+    def test_negative_volume_rejected(self):
+        data = _make_prices()
+        n = len(data["strikes"])
+        bad = np.zeros(n)
+        bad[0] = -1.0
+        with pytest.raises(ValueError, match="volume must be non-negative"):
+            OptionChain(**data, volume=bad)
+
+    def test_negative_open_interest_rejected(self):
+        data = _make_prices()
+        n = len(data["strikes"])
+        bad = np.zeros(n)
+        bad[0] = -1.0
+        with pytest.raises(ValueError, match="open_interest must be non-negative"):
+            OptionChain(**data, open_interest=bad)
+
+
+class TestVolumeOIPassthrough:
+    """Tests for volume/open_interest passthrough through conversions."""
+
+    def _chain_with_vol_oi(self):
+        data = _make_prices()
+        n = len(data["strikes"])
+        vol = np.arange(1.0, n + 1)
+        oi = np.arange(100.0, 100.0 + n)
+        return OptionChain(**data, volume=vol, open_interest=oi)
+
+    def test_to_smile_data_passes_through(self):
+        chain = self._chain_with_vol_oi()
+        sd = chain.to_smile_data()
+        np.testing.assert_array_equal(sd.volume, chain.volume)
+        np.testing.assert_array_equal(sd.open_interest, chain.open_interest)
+
+    def test_to_smile_data_none_passes_through(self):
+        data = _make_prices()
+        chain = OptionChain(**data)
+        sd = chain.to_smile_data()
+        assert sd.volume is None
+        assert sd.open_interest is None
+
+    def test_to_smile_data_blended_passes_through(self):
+        chain = self._chain_with_vol_oi()
+        sd = chain.to_smile_data_blended()
+        # blended may exclude some strikes, so length may differ
+        assert sd.volume is not None
+        assert sd.open_interest is not None
+        assert len(sd.volume) == len(sd.x)
+        assert len(sd.open_interest) == len(sd.x)
+
+    def test_to_smile_data_blended_none_passes_through(self):
+        data = _make_prices()
+        chain = OptionChain(**data)
+        sd = chain.to_smile_data_blended()
+        assert sd.volume is None
+        assert sd.open_interest is None
+
+    def test_denoise_subsets_volume_oi(self):
+        chain = self._chain_with_vol_oi()
+        clean = chain.denoise()
+        assert clean.volume is not None
+        assert clean.open_interest is not None
+        assert len(clean.volume) == len(clean.strikes)
+        assert len(clean.open_interest) == len(clean.strikes)
+
+    def test_denoise_none_passes_through(self):
+        data = _make_prices()
+        chain = OptionChain(**data)
+        clean = chain.denoise()
+        assert clean.volume is None
+        assert clean.open_interest is None

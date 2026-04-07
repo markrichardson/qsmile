@@ -432,3 +432,108 @@ class TestUnitisedSmileDataConversions:
         np.testing.assert_allclose(sd_back.y_bid, sd.y_bid, atol=1e-10)
         np.testing.assert_allclose(sd_back.y_ask, sd.y_ask, atol=1e-10)
         np.testing.assert_allclose(sd_back.x, sd.x, atol=1e-10)
+
+
+# --- Tests for volume / open_interest passthrough ---
+
+
+class TestSmileDataVolumeOpenInterest:
+    def _meta(self) -> SmileMetadata:
+        return SmileMetadata(forward=100.0, discount_factor=1.0, expiry=0.5, sigma_atm=0.20)
+
+    def test_default_none(self):
+        sd = _make_vol_smile_data()
+        assert sd.volume is None
+        assert sd.open_interest is None
+
+    def test_with_volume_and_open_interest(self):
+        sd = SmileData(
+            x=np.array([90.0, 100.0, 110.0]),
+            y_bid=np.array([0.19, 0.18, 0.20]),
+            y_ask=np.array([0.21, 0.20, 0.22]),
+            x_coord=XCoord.FixedStrike,
+            y_coord=YCoord.Volatility,
+            metadata=self._meta(),
+            volume=np.array([100.0, 200.0, 150.0]),
+            open_interest=np.array([1000.0, 2000.0, 1500.0]),
+        )
+        np.testing.assert_array_equal(sd.volume, [100.0, 200.0, 150.0])
+        np.testing.assert_array_equal(sd.open_interest, [1000.0, 2000.0, 1500.0])
+
+    def test_coerced_to_float64(self):
+        sd = SmileData(
+            x=np.array([90.0, 100.0, 110.0]),
+            y_bid=np.array([0.19, 0.18, 0.20]),
+            y_ask=np.array([0.21, 0.20, 0.22]),
+            x_coord=XCoord.FixedStrike,
+            y_coord=YCoord.Volatility,
+            metadata=self._meta(),
+            volume=[100, 200, 150],
+            open_interest=[1000, 2000, 1500],
+        )
+        assert sd.volume.dtype == np.float64
+        assert sd.open_interest.dtype == np.float64
+
+    def test_volume_length_mismatch(self):
+        with pytest.raises(ValueError, match="volume must have the same length"):
+            SmileData(
+                x=np.array([90.0, 100.0, 110.0]),
+                y_bid=np.array([0.19, 0.18, 0.20]),
+                y_ask=np.array([0.21, 0.20, 0.22]),
+                x_coord=XCoord.FixedStrike,
+                y_coord=YCoord.Volatility,
+                metadata=self._meta(),
+                volume=np.array([100.0, 200.0]),
+            )
+
+    def test_open_interest_length_mismatch(self):
+        with pytest.raises(ValueError, match="open_interest must have the same length"):
+            SmileData(
+                x=np.array([90.0, 100.0, 110.0]),
+                y_bid=np.array([0.19, 0.18, 0.20]),
+                y_ask=np.array([0.21, 0.20, 0.22]),
+                x_coord=XCoord.FixedStrike,
+                y_coord=YCoord.Volatility,
+                metadata=self._meta(),
+                open_interest=np.array([1000.0]),
+            )
+
+    def test_negative_volume_rejected(self):
+        with pytest.raises(ValueError, match="volume must be non-negative"):
+            SmileData(
+                x=np.array([90.0, 100.0, 110.0]),
+                y_bid=np.array([0.19, 0.18, 0.20]),
+                y_ask=np.array([0.21, 0.20, 0.22]),
+                x_coord=XCoord.FixedStrike,
+                y_coord=YCoord.Volatility,
+                metadata=self._meta(),
+                volume=np.array([100.0, -1.0, 150.0]),
+            )
+
+    def test_negative_open_interest_rejected(self):
+        with pytest.raises(ValueError, match="open_interest must be non-negative"):
+            SmileData(
+                x=np.array([90.0, 100.0, 110.0]),
+                y_bid=np.array([0.19, 0.18, 0.20]),
+                y_ask=np.array([0.21, 0.20, 0.22]),
+                x_coord=XCoord.FixedStrike,
+                y_coord=YCoord.Volatility,
+                metadata=self._meta(),
+                open_interest=np.array([1000.0, 2000.0, -1.0]),
+            )
+
+    def test_transform_preserves_volume_and_oi(self):
+        vol = np.array([100.0, 200.0, 150.0, 300.0, 250.0, 180.0, 120.0])
+        oi = np.array([1000.0, 2000.0, 1500.0, 3000.0, 2500.0, 1800.0, 1200.0])
+        sd = _make_vol_smile_data()
+        sd.volume = vol
+        sd.open_interest = oi
+        sd_u = sd.transform(XCoord.StandardisedStrike, YCoord.TotalVariance)
+        np.testing.assert_array_equal(sd_u.volume, vol)
+        np.testing.assert_array_equal(sd_u.open_interest, oi)
+
+    def test_transform_preserves_none(self):
+        sd = _make_vol_smile_data()
+        sd_u = sd.transform(XCoord.StandardisedStrike, YCoord.TotalVariance)
+        assert sd_u.volume is None
+        assert sd_u.open_interest is None

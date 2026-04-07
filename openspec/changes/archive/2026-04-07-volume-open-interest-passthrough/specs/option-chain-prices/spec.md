@@ -1,4 +1,4 @@
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: OptionChain exposes SmileData
 The system SHALL provide a `to_smile_data()` method on `OptionChain` that returns a `SmileData` with `x_coord=XCoord.FixedStrike`, `y_coord=YCoord.Price`, X values as strikes, and Y bid/ask as the call bid and ask prices. If `volume` and/or `open_interest` are present on the `OptionChain`, they SHALL be passed through to the returned `SmileData`.
