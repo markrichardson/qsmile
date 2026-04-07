@@ -49,15 +49,22 @@ def _context_for_model(model: type[SmileModel], sd: SmileData) -> dict[str, Any]
     Compares the model's dataclass fields against ``param_names`` to find
     context fields (e.g. ``expiry``, ``forward`` for SABR).  Values are
     sourced from ``SmileData.metadata``.
+
+    Models that declare an ``expiry: float`` context field receive
+    ``metadata.texpiry`` (the derived year-fraction), not ``metadata.expiry``
+    (which is a ``pd.Timestamp``).
     """
+    _METADATA_ALIAS: dict[str, str] = {"expiry": "texpiry"}
+
     if not dataclasses.is_dataclass(model):
         return {}
     all_field_names = {f.name for f in dataclasses.fields(model)}
     context_fields = all_field_names - set(model.param_names)
     context: dict[str, Any] = {}
     for name in context_fields:
-        if hasattr(sd.metadata, name):
-            context[name] = getattr(sd.metadata, name)
+        attr = _METADATA_ALIAS.get(name, name)
+        if hasattr(sd.metadata, attr):
+            context[name] = getattr(sd.metadata, attr)
     return context
 
 

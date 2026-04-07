@@ -6,12 +6,14 @@ from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING
 
 import numpy as np
+import pandas as pd
 from numpy.typing import NDArray
 
 if TYPE_CHECKING:
     import matplotlib.figure
 
 from qsmile.core.coords import XCoord, YCoord
+from qsmile.core.daycount import DayCount
 from qsmile.core.maps import (
     apply_x_chain,
     apply_y_chain,
@@ -149,8 +151,10 @@ class SmileData:
         strikes: NDArray[np.float64],
         ivs: NDArray[np.float64],
         forward: float,
-        expiry: float,
+        date: pd.Timestamp,
+        expiry: pd.Timestamp,
         discount_factor: float = 1.0,
+        daycount: DayCount = DayCount.ACT365,
     ) -> SmileData:
         """Create from mid implied vols (setting y_bid = y_ask = ivs).
 
@@ -162,10 +166,14 @@ class SmileData:
             Mid implied volatilities.
         forward : float
             Forward price.
-        expiry : float
-            Time to expiry in years.
+        date : pd.Timestamp
+            Valuation date.
+        expiry : pd.Timestamp
+            Expiry date.
         discount_factor : float
             Discount factor, defaults to 1.0.
+        daycount : DayCount
+            Day-count convention, defaults to ACT365.
         """
         strikes = np.asarray(strikes, dtype=np.float64)
         ivs = np.asarray(ivs, dtype=np.float64)
@@ -178,9 +186,11 @@ class SmileData:
             x_coord=XCoord.FixedStrike,
             y_coord=YCoord.Volatility,
             metadata=SmileMetadata(
+                date=date,
+                expiry=expiry,
+                daycount=daycount,
                 forward=forward,
                 discount_factor=discount_factor,
-                expiry=expiry,
                 sigma_atm=sigma_atm,
             ),
         )

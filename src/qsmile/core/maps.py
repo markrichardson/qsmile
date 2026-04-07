@@ -67,14 +67,14 @@ def _log_moneyness_to_standardised(x: NDArray[np.float64], meta: SmileMetadata) 
     if meta.sigma_atm is None:
         msg = "sigma_atm is required for StandardisedStrike transforms"
         raise ValueError(msg)
-    return x / (meta.sigma_atm * np.sqrt(meta.expiry))
+    return x / (meta.sigma_atm * np.sqrt(meta.texpiry))
 
 
 def _standardised_to_log_moneyness(x: NDArray[np.float64], meta: SmileMetadata) -> NDArray[np.float64]:
     if meta.sigma_atm is None:
         msg = "sigma_atm is required for StandardisedStrike transforms"
         raise ValueError(msg)
-    return x * meta.sigma_atm * np.sqrt(meta.expiry)
+    return x * meta.sigma_atm * np.sqrt(meta.texpiry)
 
 
 # --- Y-map functions ---
@@ -91,13 +91,13 @@ def _variance_to_vol(y: NDArray[np.float64], x: NDArray[np.float64], meta: Smile
 def _variance_to_total_variance(
     y: NDArray[np.float64], x: NDArray[np.float64], meta: SmileMetadata
 ) -> NDArray[np.float64]:
-    return y * meta.expiry
+    return y * meta.texpiry
 
 
 def _total_variance_to_variance(
     y: NDArray[np.float64], x: NDArray[np.float64], meta: SmileMetadata
 ) -> NDArray[np.float64]:
-    return y / meta.expiry
+    return y / meta.texpiry
 
 
 def _vol_to_price(y: NDArray[np.float64], x: NDArray[np.float64], meta: SmileMetadata) -> NDArray[np.float64]:
@@ -111,7 +111,7 @@ def _vol_to_price(y: NDArray[np.float64], x: NDArray[np.float64], meta: SmileMet
         msg = "forward and discount_factor are required for vol-to-price transform"
         raise TypeError(msg)
     return np.asarray(
-        black76_call(meta.forward, x, meta.discount_factor, y, meta.expiry),
+        black76_call(meta.forward, x, meta.discount_factor, y, meta.texpiry),
         dtype=np.float64,
     )
 
@@ -134,7 +134,7 @@ def _price_to_vol(y: NDArray[np.float64], x: NDArray[np.float64], meta: SmileMet
             meta.forward,
             float(x[i]),
             meta.discount_factor,
-            meta.expiry,
+            meta.texpiry,
             is_call=True,
         )
     return result

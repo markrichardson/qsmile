@@ -5,6 +5,7 @@ from __future__ import annotations
 import unittest.mock
 
 import numpy as np
+import pandas as pd
 import pytest
 
 from qsmile.core.coords import XCoord, YCoord
@@ -22,7 +23,13 @@ def sample_vol_smile():
         y_ask=np.array([0.26, 0.21, 0.23]),
         x_coord=XCoord.FixedStrike,
         y_coord=YCoord.Volatility,
-        metadata=SmileMetadata(forward=100.0, discount_factor=1.0, expiry=0.5, sigma_atm=0.20),
+        metadata=SmileMetadata(
+            date=pd.Timestamp("2024-01-01"),
+            expiry=pd.Timestamp("2024-07-01"),
+            forward=100.0,
+            discount_factor=1.0,
+            sigma_atm=0.20,
+        ),
     )
 
 
@@ -36,7 +43,13 @@ def sample_unitised_smile():
         y_ask=np.array([0.021, 0.020, 0.021]),
         x_coord=XCoord.StandardisedStrike,
         y_coord=YCoord.TotalVariance,
-        metadata=SmileMetadata(forward=1.0, discount_factor=1.0, expiry=0.5, sigma_atm=0.2),
+        metadata=SmileMetadata(
+            date=pd.Timestamp("2024-01-01"),
+            expiry=pd.Timestamp("2024-07-01"),
+            forward=1.0,
+            discount_factor=1.0,
+            sigma_atm=0.2,
+        ),
     )
 
 
@@ -84,7 +97,9 @@ class TestPricesPlot:
             call_ask=call_mid + 0.1,
             put_bid=put_mid - 0.1,
             put_ask=put_mid + 0.1,
-            metadata=SmileMetadata(expiry=T, forward=F, discount_factor=D),
+            metadata=SmileMetadata(
+                date=pd.Timestamp("2024-01-01"), expiry=pd.Timestamp("2024-07-01"), forward=F, discount_factor=D
+            ),
         )
         import matplotlib.figure
 

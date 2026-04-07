@@ -24,6 +24,7 @@ dependencies = [
     "numpy>=2.4.0,<3.0",     # Numerical arrays for market data and SVI evaluation
     "scipy>=1.14.0,<2.0",    # Optimisation (least_squares) for SVI fitting
     "cvxpy>=1.6.0,<2.0",     # Convex optimisation for forward/DF calibration
+    "pandas>=2.0,<3.1",      # pd.Timestamp for date handling in SmileMetadata
 ]
 
 [project.optional-dependencies]

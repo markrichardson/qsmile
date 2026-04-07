@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pandas as pd
 
 from qsmile.data.vols import SmileData
 from qsmile.models.fitting import SmileResult, fit
@@ -14,17 +15,19 @@ _TRUE_PARAMS = SVIModel(a=0.04, b=0.1, rho=-0.3, m=0.0, sigma=0.2)
 
 def _make_synthetic_sd(
     params: SVIModel = _TRUE_PARAMS,
-    expiry: float = 0.5,
     forward: float = 100.0,
     n_strikes: int = 20,
     strike_lo: float = 80.0,
     strike_hi: float = 120.0,
 ) -> SmileData:
     """Generate SmileData from known SVI parameters (noiseless)."""
+    date = pd.Timestamp("2024-01-01")
+    expiry = pd.Timestamp("2024-07-01")
+    texpiry = (expiry - date).days / 365.0
     strikes = np.linspace(strike_lo, strike_hi, n_strikes)
     k = np.log(strikes / forward)
-    ivs = params.implied_vol(k, expiry)
-    return SmileData.from_mid_vols(strikes=strikes, ivs=ivs, forward=forward, expiry=expiry)
+    ivs = params.implied_vol(k, texpiry)
+    return SmileData.from_mid_vols(strikes=strikes, ivs=ivs, forward=forward, date=date, expiry=expiry)
 
 
 class TestFitSyntheticRoundTrip:
@@ -56,17 +59,25 @@ class TestFitNoisyData:
 
     def test_noisy_fit_succeeds(self):
         true_params = SVIModel(a=0.04, b=0.12, rho=-0.4, m=0.01, sigma=0.25)
-        expiry = 1.0
+        date = pd.Timestamp("2024-01-01")
+        expiry_ts = pd.Timestamp("2025-01-01")
+        texpiry = (expiry_ts - date).days / 365.0
         strikes = np.linspace(80, 120, 15)
         forward = 100.0
         k = np.log(strikes / forward)
-        ivs_clean = true_params.implied_vol(k, expiry)
+        ivs_clean = true_params.implied_vol(k, texpiry)
 
         rng = np.random.default_rng(42)
         noise = rng.normal(0, 0.002, size=ivs_clean.shape)
         ivs_noisy = ivs_clean + noise
 
-        sd = SmileData.from_mid_vols(strikes=strikes, ivs=ivs_noisy, forward=forward, expiry=expiry)
+        sd = SmileData.from_mid_vols(
+            strikes=strikes,
+            ivs=ivs_noisy,
+            forward=forward,
+            date=date,
+            expiry=expiry_ts,
+        )
         result = fit(sd, SVIModel)
 
         assert result.success

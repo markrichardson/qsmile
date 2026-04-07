@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pandas as pd
 import pytest
 
 from qsmile.core.black76 import black76_call, black76_put
@@ -43,7 +44,12 @@ def _make_prices(
         "call_ask": call_ask,
         "put_bid": put_bid,
         "put_ask": put_ask,
-        "metadata": SmileMetadata(expiry=expiry, forward=forward, discount_factor=discount_factor),
+        "metadata": SmileMetadata(
+            date=pd.Timestamp("2024-01-01"),
+            expiry=pd.Timestamp("2024-07-01"),
+            forward=forward,
+            discount_factor=discount_factor,
+        ),
     }
 
 
@@ -95,8 +101,18 @@ class TestOptionChainValidation:
 
     def test_non_positive_expiry(self):
         data = _make_prices()
-        with pytest.raises(ValueError, match="expiry must be positive"):
-            OptionChain(**{**data, "metadata": SmileMetadata(expiry=0.0, forward=100.0, discount_factor=0.98)})
+        with pytest.raises(ValueError, match="expiry must be after date"):
+            OptionChain(
+                **{
+                    **data,
+                    "metadata": SmileMetadata(
+                        date=pd.Timestamp("2024-07-01"),
+                        expiry=pd.Timestamp("2024-01-01"),
+                        forward=100.0,
+                        discount_factor=0.98,
+                    ),
+                }
+            )
 
     def test_fewer_than_three_strikes(self):
         with pytest.raises(ValueError, match="at least 3"):
@@ -106,7 +122,12 @@ class TestOptionChainValidation:
                 call_ask=[6.0, 3.0],
                 put_bid=[2.0, 5.0],
                 put_ask=[3.0, 6.0],
-                metadata=SmileMetadata(expiry=0.5, forward=100.0, discount_factor=1.0),
+                metadata=SmileMetadata(
+                    date=pd.Timestamp("2024-01-01"),
+                    expiry=pd.Timestamp("2024-07-01"),
+                    forward=100.0,
+                    discount_factor=1.0,
+                ),
             )
 
 
@@ -139,7 +160,7 @@ class TestCalibration:
             call_ask=data["call_ask"],
             put_bid=data["put_bid"],
             put_ask=data["put_ask"],
-            metadata=SmileMetadata(expiry=data["metadata"].expiry),
+            metadata=SmileMetadata(date=data["metadata"].date, expiry=data["metadata"].expiry),
         )
         assert chain.metadata.forward == pytest.approx(100.0, rel=1e-3)
         assert chain.metadata.discount_factor == pytest.approx(0.98, rel=1e-2)
@@ -542,7 +563,12 @@ class TestOptionChainToSmileData:
             call_ask=call_ask,
             put_bid=put_bid,
             put_ask=put_ask,
-            metadata=SmileMetadata(expiry=expiry, forward=forward, discount_factor=discount_factor),
+            metadata=SmileMetadata(
+                date=pd.Timestamp("2024-01-01"),
+                expiry=pd.Timestamp("2024-04-01"),
+                forward=forward,
+                discount_factor=discount_factor,
+            ),
         )
         sd = prices.to_smile_data()
         assert sd.x_coord == XCoord.FixedStrike

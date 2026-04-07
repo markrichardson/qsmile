@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pandas as pd
 import pytest
 
 from qsmile.core.coords import XCoord, YCoord
@@ -13,7 +14,6 @@ from qsmile.data.vols import SmileData
 def _make_vol_smile_data(
     forward: float = 100.0,
     discount_factor: float = 0.98,
-    expiry: float = 0.5,
 ) -> SmileData:
     """Create a sample SmileData in (FixedStrike, Volatility) coords."""
     strikes = np.array([85.0, 90.0, 95.0, 100.0, 105.0, 110.0, 115.0])
@@ -28,9 +28,10 @@ def _make_vol_smile_data(
         x_coord=XCoord.FixedStrike,
         y_coord=YCoord.Volatility,
         metadata=SmileMetadata(
+            date=pd.Timestamp("2024-01-01"),
+            expiry=pd.Timestamp("2024-07-01"),
             forward=forward,
             discount_factor=discount_factor,
-            expiry=expiry,
             sigma_atm=sigma_atm,
         ),
     )
@@ -52,10 +53,10 @@ class TestVolSmileDataConversions:
         sd = _make_vol_smile_data()
         sd_u = sd.transform(XCoord.StandardisedStrike, YCoord.TotalVariance)
         log_m = np.log(sd.x / sd.metadata.forward)
-        expected_k = log_m / (sd.metadata.sigma_atm * np.sqrt(sd.metadata.expiry))
+        expected_k = log_m / (sd.metadata.sigma_atm * np.sqrt(sd.metadata.texpiry))
         np.testing.assert_allclose(sd_u.x, expected_k)
-        np.testing.assert_allclose(sd_u.y_bid, sd.y_bid**2 * sd.metadata.expiry)
-        np.testing.assert_allclose(sd_u.y_ask, sd.y_ask**2 * sd.metadata.expiry)
+        np.testing.assert_allclose(sd_u.y_bid, sd.y_bid**2 * sd.metadata.texpiry)
+        np.testing.assert_allclose(sd_u.y_ask, sd.y_ask**2 * sd.metadata.texpiry)
 
     def test_vol_price_round_trip(self):
         sd = _make_vol_smile_data()
@@ -72,7 +73,13 @@ class TestVolSmileDataConversions:
 
 # --- Tests merged from test_chain.py ---
 
-META = SmileMetadata(forward=100.0, discount_factor=0.99, expiry=0.25, sigma_atm=0.20)
+META = SmileMetadata(
+    date=pd.Timestamp("2024-01-01"),
+    expiry=pd.Timestamp("2024-04-01"),
+    forward=100.0,
+    discount_factor=0.99,
+    sigma_atm=0.20,
+)
 STRIKES = np.array([90.0, 95.0, 100.0, 105.0, 110.0])
 VOLS_BID = np.array([0.22, 0.20, 0.18, 0.20, 0.22])
 VOLS_ASK = np.array([0.24, 0.22, 0.20, 0.22, 0.24])
@@ -82,25 +89,38 @@ class TestFromMidVolsConstruction:
     def test_from_arrays(self):
         strikes = np.array([90.0, 100.0, 110.0])
         ivs = np.array([0.25, 0.20, 0.22])
-        sd = SmileData.from_mid_vols(strikes=strikes, ivs=ivs, forward=100.0, expiry=0.5)
+        sd = SmileData.from_mid_vols(
+            strikes=strikes, ivs=ivs, forward=100.0, date=pd.Timestamp("2024-01-01"), expiry=pd.Timestamp("2024-07-01")
+        )
         np.testing.assert_array_equal(sd.x, strikes)
         np.testing.assert_array_equal(sd.y_bid, ivs)
         np.testing.assert_array_equal(sd.y_ask, ivs)
         assert sd.x_coord == XCoord.FixedStrike
         assert sd.y_coord == YCoord.Volatility
         assert sd.metadata.forward == 100.0
-        assert sd.metadata.expiry == 0.5
+        assert sd.metadata.expiry == pd.Timestamp("2024-07-01")
         assert sd.metadata.discount_factor == 1.0
 
     def test_from_lists(self):
-        sd = SmileData.from_mid_vols(strikes=[90, 100, 110], ivs=[0.25, 0.20, 0.22], forward=100.0, expiry=0.5)
+        sd = SmileData.from_mid_vols(
+            strikes=[90, 100, 110],
+            ivs=[0.25, 0.20, 0.22],
+            forward=100.0,
+            date=pd.Timestamp("2024-01-01"),
+            expiry=pd.Timestamp("2024-07-01"),
+        )
         assert isinstance(sd.x, np.ndarray)
         assert isinstance(sd.y_bid, np.ndarray)
         assert sd.x.dtype == np.float64
 
     def test_custom_discount_factor(self):
         sd = SmileData.from_mid_vols(
-            strikes=[90, 100, 110], ivs=[0.25, 0.20, 0.22], forward=100.0, expiry=0.5, discount_factor=0.99
+            strikes=[90, 100, 110],
+            ivs=[0.25, 0.20, 0.22],
+            forward=100.0,
+            date=pd.Timestamp("2024-01-01"),
+            expiry=pd.Timestamp("2024-07-01"),
+            discount_factor=0.99,
         )
         assert sd.metadata.discount_factor == 0.99
 
@@ -109,7 +129,8 @@ class TestFromMidVolsConstruction:
             strikes=np.array([90.0, 100.0, 110.0]),
             ivs=np.array([0.25, 0.20, 0.22]),
             forward=100.0,
-            expiry=0.5,
+            date=pd.Timestamp("2024-01-01"),
+            expiry=pd.Timestamp("2024-07-01"),
         )
         # ATM strike is 100.0, vol at 100 is 0.20
         assert sd.metadata.sigma_atm == pytest.approx(0.20)
@@ -118,20 +139,40 @@ class TestFromMidVolsConstruction:
 class TestFromMidVolsValidation:
     def test_negative_iv(self):
         with pytest.raises(ValueError, match=r"positive|non-negative"):
-            SmileData.from_mid_vols(strikes=[90, 100, 110], ivs=[0.25, -0.01, 0.22], forward=100.0, expiry=0.5)
+            SmileData.from_mid_vols(
+                strikes=[90, 100, 110],
+                ivs=[0.25, -0.01, 0.22],
+                forward=100.0,
+                date=pd.Timestamp("2024-01-01"),
+                expiry=pd.Timestamp("2024-07-01"),
+            )
 
     def test_non_positive_strike(self):
         with pytest.raises(ValueError, match="positive"):
-            SmileData.from_mid_vols(strikes=[0, 100, 110], ivs=[0.25, 0.20, 0.22], forward=100.0, expiry=0.5)
+            SmileData.from_mid_vols(
+                strikes=[0, 100, 110],
+                ivs=[0.25, 0.20, 0.22],
+                forward=100.0,
+                date=pd.Timestamp("2024-01-01"),
+                expiry=pd.Timestamp("2024-07-01"),
+            )
 
     def test_fewer_than_three_points(self):
         with pytest.raises(ValueError, match="at least 3"):
-            SmileData.from_mid_vols(strikes=[100, 110], ivs=[0.20, 0.22], forward=100.0, expiry=0.5)
+            SmileData.from_mid_vols(
+                strikes=[100, 110],
+                ivs=[0.20, 0.22],
+                forward=100.0,
+                date=pd.Timestamp("2024-01-01"),
+                expiry=pd.Timestamp("2024-07-01"),
+            )
 
 
 class TestSmileDataValidation:
     def _meta(self) -> SmileMetadata:
-        return SmileMetadata(forward=100.0, discount_factor=1.0, expiry=0.5)
+        return SmileMetadata(
+            date=pd.Timestamp("2024-01-01"), expiry=pd.Timestamp("2024-07-01"), forward=100.0, discount_factor=1.0
+        )
 
     def test_fewer_than_three_points(self):
         with pytest.raises(ValueError, match="at least 3"):
@@ -218,7 +259,13 @@ class TestSmileDataValidation:
                 y_ask=np.array([0.02, 0.03, 0.03]),
                 x_coord=XCoord.StandardisedStrike,
                 y_coord=YCoord.TotalVariance,
-                metadata=SmileMetadata(forward=1.0, discount_factor=1.0, expiry=0.5, sigma_atm=0.2),
+                metadata=SmileMetadata(
+                    date=pd.Timestamp("2024-01-01"),
+                    expiry=pd.Timestamp("2024-07-01"),
+                    forward=1.0,
+                    discount_factor=1.0,
+                    sigma_atm=0.2,
+                ),
             )
 
     def test_log_moneyness_allows_negative_x(self):
@@ -341,8 +388,8 @@ class TestSmileDataTransform:
         )
         result = sd.transform(XCoord.LogMoneynessStrike, YCoord.TotalVariance)
         np.testing.assert_allclose(result.x, np.log(STRIKES / META.forward))
-        np.testing.assert_allclose(result.y_bid, VOLS_BID**2 * META.expiry)
-        np.testing.assert_allclose(result.y_ask, VOLS_ASK**2 * META.expiry)
+        np.testing.assert_allclose(result.y_bid, VOLS_BID**2 * META.texpiry)
+        np.testing.assert_allclose(result.y_ask, VOLS_ASK**2 * META.texpiry)
 
     def test_round_trip(self) -> None:
         sd = SmileData(
@@ -360,7 +407,9 @@ class TestSmileDataTransform:
         np.testing.assert_allclose(recovered.y_ask, VOLS_ASK, rtol=1e-12)
 
     def test_sigma_atm_required_for_standardised(self) -> None:
-        meta_no_atm = SmileMetadata(forward=100.0, discount_factor=0.99, expiry=0.25)
+        meta_no_atm = SmileMetadata(
+            date=pd.Timestamp("2024-01-01"), expiry=pd.Timestamp("2024-04-01"), forward=100.0, discount_factor=0.99
+        )
         sd = SmileData(
             x=STRIKES,
             y_bid=VOLS_BID,
@@ -407,9 +456,10 @@ def _make_unitised_smile_data() -> SmileData:
         x_coord=XCoord.StandardisedStrike,
         y_coord=YCoord.TotalVariance,
         metadata=SmileMetadata(
+            date=pd.Timestamp("2024-01-01"),
+            expiry=pd.Timestamp("2024-07-01"),
             forward=1.0,
             discount_factor=1.0,
-            expiry=expiry,
             sigma_atm=sigma_atm,
         ),
     )
@@ -439,7 +489,13 @@ class TestUnitisedSmileDataConversions:
 
 class TestSmileDataVolumeOpenInterest:
     def _meta(self) -> SmileMetadata:
-        return SmileMetadata(forward=100.0, discount_factor=1.0, expiry=0.5, sigma_atm=0.20)
+        return SmileMetadata(
+            date=pd.Timestamp("2024-01-01"),
+            expiry=pd.Timestamp("2024-07-01"),
+            forward=100.0,
+            discount_factor=1.0,
+            sigma_atm=0.20,
+        )
 
     def test_default_none(self):
         sd = _make_vol_smile_data()

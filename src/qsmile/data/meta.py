@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import pandas as pd
+
+from qsmile.core.daycount import DayCount
+
 
 @dataclass(frozen=True)
 class SmileMetadata:
@@ -11,26 +15,38 @@ class SmileMetadata:
 
     Parameters
     ----------
+    date : pd.Timestamp
+        Valuation / pricing date.
+    expiry : pd.Timestamp
+        Expiry date. Must be strictly after ``date``.
+    daycount : DayCount
+        Day-count convention for computing the year fraction.
+        Defaults to ``DayCount.ACT365``.
     forward : float | None
         Forward price. Must be positive when provided.
     discount_factor : float | None
         Discount factor. Must be positive when provided.
-    expiry : float
-        Time to expiry in years. Must be positive.
     sigma_atm : float | None
         ATM implied volatility. Must be positive when provided.
         Required for StandardisedStrike transforms.
     """
 
-    expiry: float
+    date: pd.Timestamp
+    expiry: pd.Timestamp
+    daycount: DayCount = DayCount.ACT365
     forward: float | None = None
     discount_factor: float | None = None
     sigma_atm: float | None = None
 
+    @property
+    def texpiry(self) -> float:
+        """Year fraction derived from (date, expiry, daycount)."""
+        return self.daycount.year_fraction(self.date, self.expiry)
+
     def __post_init__(self) -> None:
         """Validate inputs."""
-        if self.expiry <= 0:
-            msg = f"expiry must be positive, got {self.expiry}"
+        if self.expiry <= self.date:
+            msg = f"expiry must be after date, got date={self.date}, expiry={self.expiry}"
             raise ValueError(msg)
         if self.forward is not None and self.forward <= 0:
             msg = f"forward must be positive, got {self.forward}"

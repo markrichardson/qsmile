@@ -284,8 +284,9 @@ class OptionChain:
         from qsmile.data.vols import SmileData
 
         meta = self.metadata
-        assert meta.forward is not None  # noqa: S101
-        assert meta.discount_factor is not None  # noqa: S101
+        if meta.forward is None or meta.discount_factor is None:
+            msg = "forward and discount_factor must be calibrated before to_smile_data()"
+            raise TypeError(msg)
 
         n = len(self.strikes)
 
@@ -299,19 +300,19 @@ class OptionChain:
             k = float(self.strikes[i])
             with contextlib.suppress(ValueError):
                 call_bid_iv[i] = black76_implied_vol(
-                    float(self.call_bid[i]), meta.forward, k, meta.discount_factor, meta.expiry, is_call=True
+                    float(self.call_bid[i]), meta.forward, k, meta.discount_factor, meta.texpiry, is_call=True
                 )
             with contextlib.suppress(ValueError):
                 call_ask_iv[i] = black76_implied_vol(
-                    float(self.call_ask[i]), meta.forward, k, meta.discount_factor, meta.expiry, is_call=True
+                    float(self.call_ask[i]), meta.forward, k, meta.discount_factor, meta.texpiry, is_call=True
                 )
             with contextlib.suppress(ValueError):
                 put_bid_iv[i] = black76_implied_vol(
-                    float(self.put_bid[i]), meta.forward, k, meta.discount_factor, meta.expiry, is_call=False
+                    float(self.put_bid[i]), meta.forward, k, meta.discount_factor, meta.texpiry, is_call=False
                 )
             with contextlib.suppress(ValueError):
                 put_ask_iv[i] = black76_implied_vol(
-                    float(self.put_ask[i]), meta.forward, k, meta.discount_factor, meta.expiry, is_call=False
+                    float(self.put_ask[i]), meta.forward, k, meta.discount_factor, meta.texpiry, is_call=False
                 )
 
         # Blend using delta weights
@@ -322,7 +323,7 @@ class OptionChain:
             put_ask_iv,
             self.strikes,
             meta.forward,
-            meta.expiry,
+            meta.texpiry,
         )
 
         # Exclude strikes where neither vol is available
@@ -458,7 +459,9 @@ class OptionChain:
             call_ask=self.call_ask[keep],
             put_bid=self.put_bid[keep],
             put_ask=self.put_ask[keep],
-            metadata=SmileMetadata(expiry=self.metadata.expiry),
+            metadata=SmileMetadata(
+                date=self.metadata.date, expiry=self.metadata.expiry, daycount=self.metadata.daycount
+            ),
             volume=self.volume[keep] if self.volume is not None else None,
             open_interest=self.open_interest[keep] if self.open_interest is not None else None,
         )

@@ -177,8 +177,10 @@ def cell_load_data():
     _pq = sorted(_root.glob("parquet/chains/*.parquet"))[-1]
     df_raw = pd.read_parquet(_pq)
 
-    expiry_days = float(df_raw["daysToExpiry"].iloc[0])
-    expiry = expiry_days / 365.0
+    date = pd.Timestamp(df_raw["fetchDate"].iloc[0])
+    expiry_date = pd.Timestamp(df_raw["expiryDate"].iloc[0])
+    expiry_days = (expiry_date - date).days
+    texpiry = expiry_days / 365.0
 
     # Pivot calls/puts onto common strikes
     _cols = ["strike", "bid", "ask", "volume", "openInterest"]
@@ -193,14 +195,16 @@ def cell_load_data():
     put_ask = merged["ask_put"].values.astype(np.float64)
     volume = (merged["volume_call"].fillna(0).values + merged["volume_put"].fillna(0).values).astype(np.float64)
     oi = (merged["openInterest_call"].fillna(0).values + merged["openInterest_put"].fillna(0).values).astype(np.float64)
-    return call_ask, call_bid, expiry, oi, put_ask, put_bid, strikes, volume
+    return call_ask, call_bid, date, expiry_date, texpiry, oi, put_ask, put_bid, strikes, volume
 
 
 @app.cell(hide_code=True)
 def cell_build_chain(
     call_ask,
     call_bid,
-    expiry,
+    date,
+    expiry_date,
+    texpiry,
     oi,
     put_ask,
     put_bid,
@@ -214,7 +218,7 @@ def cell_build_chain(
         call_ask=call_ask,
         put_bid=put_bid,
         put_ask=put_ask,
-        metadata=SmileMetadata(expiry=expiry),
+        metadata=SmileMetadata(date=date, expiry=expiry_date),
         volume=volume,
         open_interest=oi,
     )
@@ -226,7 +230,7 @@ def cell_build_chain(
     | Quantity | Value |
     |----------|------:|
     | Strikes loaded | {len(strikes)} |
-    | Expiry | {expiry:.4f} yr ({expiry * 365:.0f} days) |
+    | Expiry | {texpiry:.4f} yr ({(expiry_date - date).days} days) |
     | Forward $F$ | {chain_raw.metadata.forward:,.2f} |
     | Discount factor $D$ | {chain_raw.metadata.discount_factor:.6f} |
     """
@@ -358,7 +362,7 @@ def cell_smile_data(chain):
 
     **Metadata** — forward={sd_vols.metadata.forward:,.2f},
     DF={sd_vols.metadata.discount_factor:.6f},
-    expiry={sd_vols.metadata.expiry:.4f}
+    expiry={sd_vols.metadata.texpiry:.4f}
     """
     )
     return (sd_vols,)
@@ -491,7 +495,7 @@ def cell_svi_fit(sd_vols):
 def cell_svi_plot(sd_vols, svi_result):
     """Overlay SVI fit on market vols."""
     _fwd = sd_vols.metadata.forward
-    _exp = sd_vols.metadata.expiry
+    _exp = sd_vols.metadata.texpiry
     _k_fine = np.linspace(sd_vols.x.min() * 0.95, sd_vols.x.max() * 1.05, 300)
     _log_k = np.log(_k_fine / _fwd)
     _iv_svi = svi_result.params.implied_vol(_log_k, _exp)
@@ -589,7 +593,7 @@ def cell_sabr_fit(sd_vols):
 def cell_model_comparison(sabr_result, sd_vols, svi_result):
     """Compare SVI and SABR fits on the same plot."""
     _fwd = sd_vols.metadata.forward
-    _exp = sd_vols.metadata.expiry
+    _exp = sd_vols.metadata.texpiry
     _k_fine = np.linspace(sd_vols.x.min() * 0.95, sd_vols.x.max() * 1.05, 300)
     _log_k = np.log(_k_fine / _fwd)
 
