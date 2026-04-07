@@ -47,9 +47,9 @@ def cell_intro():
     """Notebook introduction."""
     mo.md(
         r"""
-        # qsmile — Full Functionality Demo
+        # qsmile demo
 
-        This notebook walks through the **entire qsmile stack** using real
+        This notebook walks through the **qsmile calculaition flow** using real
         S&P 500 (SPX) option-chain data.
 
         | # | Layer | Key classes / functions |
@@ -116,7 +116,17 @@ def cell_load_data():
     put_ask = merged["ask_put"].values.astype(np.float64)
     volume = (merged["volume_call"].fillna(0).values + merged["volume_put"].fillna(0).values).astype(np.float64)
     oi = (merged["openInterest_call"].fillna(0).values + merged["openInterest_put"].fillna(0).values).astype(np.float64)
-    return call_ask, call_bid, date, expiry_date, oi, put_ask, put_bid, strikes, volume
+    return (
+        call_ask,
+        call_bid,
+        date,
+        expiry_date,
+        oi,
+        put_ask,
+        put_bid,
+        strikes,
+        volume,
+    )
 
 
 @app.cell(hide_code=True)
@@ -163,27 +173,27 @@ def cell_build_and_filter(
     _oi_cln = "Yes" if chain.open_interest is not None else "No"
 
     _filter_table = f"""\
-### Before & after filtering
+    ### Before & after filtering
 
-| Metric | Raw | Filtered |
-|--------|----:|---------:|
-| Strikes | {_n_raw} | {_n_clean} |
-| Removed | — | {_n_raw - _n_clean} |
-| Volume attached | {_vol_raw} | {_vol_cln} |
-| OI attached | {_oi_raw} | {_oi_cln} |
-"""
+    | Metric | Raw | Filtered |
+    |--------|----:|---------:|
+    | Strikes | {_n_raw} | {_n_clean} |
+    | Removed | — | {_n_raw - _n_clean} |
+    | Volume attached | {_vol_raw} | {_vol_cln} |
+    | OI attached | {_oi_raw} | {_oi_cln} |
+    """
     _meta_table = f"""\
-### Metadata
+    ### Metadata
 
-| Field | Value |
-|-------|------:|
-| Date | {chain.metadata.date.strftime("%Y-%m-%d")} |
-| Expiry | {chain.metadata.expiry.strftime("%Y-%m-%d")} |
-| Day count | {chain.metadata.daycount.value} |
-| $T$ (years) | {chain.metadata.texpiry:.4f} |
-| Forward $F$ | {chain.metadata.forward:,.2f} |
-| Discount factor $D$ | {chain.metadata.discount_factor:.6f} |
-"""
+    | Field | Value |
+    |-------|------:|
+    | Date | {chain.metadata.date.strftime("%Y-%m-%d")} |
+    | Expiry | {chain.metadata.expiry.strftime("%Y-%m-%d")} |
+    | Day count | {chain.metadata.daycount.value} |
+    | $T$ (years) | {chain.metadata.texpiry:.4f} |
+    | Forward $F$ | {chain.metadata.forward:,.2f} |
+    | Discount factor $D$ | {chain.metadata.discount_factor:.6f} |
+    """
     mo.hstack(
         [mo.md(_filter_table), mo.md(_meta_table)],
         justify="start",
@@ -313,10 +323,6 @@ def cell_smile_data(chain):
     | `sd_vols` | {sd_vols.x_coord.name} | {sd_vols.y_coord.name} | {len(sd_vols.x)} |
     | Volume attached | {"Yes" if sd_vols.volume is not None else "No"} |
     | Open interest attached | {"Yes" if sd_vols.open_interest is not None else "No"} |
-
-    **Metadata** — forward={sd_vols.metadata.forward:,.2f},
-    DF={sd_vols.metadata.discount_factor:.6f},
-    expiry={sd_vols.metadata.texpiry:.4f}
     """
     )
     return (sd_vols,)
@@ -375,31 +381,6 @@ def cell_transform_grid(sd_vols):
 
 
 @app.cell(hide_code=True)
-def cell_roundtrip(sd_vols):
-    """Demonstrate coordinate round-trip fidelity."""
-    there = sd_vols.transform(XCoord.StandardisedStrike, YCoord.TotalVariance)
-    back = there.transform(XCoord.FixedStrike, YCoord.Volatility)
-    max_x_err = float(np.max(np.abs(back.x - sd_vols.x)))
-    max_y_err = float(np.max(np.abs(back.y_mid - sd_vols.y_mid)))
-
-    mo.md(
-        f"""
-    ### Round-trip fidelity
-
-    Transform FixedStrike/Volatility → StandardisedStrike/TotalVariance → back:
-
-    | Metric | Value |
-    |--------|------:|
-    | Max X error | {max_x_err:.2e} |
-    | Max Y error | {max_y_err:.2e} |
-
-    Exact to floating-point precision.
-    """
-    )
-    return
-
-
-@app.cell(hide_code=True)
 def cell_svi_intro():
     """Introduce SVI fitting."""
     mo.md(
@@ -409,7 +390,9 @@ def cell_svi_intro():
 
         Stochastic Volatility Inspired parametrisation (Gatheral, 2004):
 
-        $$w(k) = a + b\bigl[\rho\,(k - m) + \sqrt{(k - m)^2 + \sigma^2}\bigr]$$
+        $$
+        w(k) = a + b\bigl[\rho\,(k - m) + \sqrt{(k - m)^2 + \sigma^2}\bigr]
+        $$
 
         where $k = \ln(K/F)$ is log-moneyness and $w = \sigma^2 T$ is
         total implied variance.
@@ -428,24 +411,24 @@ def cell_svi_fit(sd_vols):
     p = svi_result.params
 
     _params_table = f"""
-### SVI Parameters
+    ### SVI Parameters
 
-| Parameter | Value | Meaning |
-|-----------|------:|--------|
-| $a$ | {p.a:.6f} | Vertical shift |
-| $b$ | {p.b:.6f} | Wing slope |
-| $\\rho$ | {p.rho:.6f} | Skew |
-| $m$ | {p.m:.6f} | Horizontal shift |
-| $\\sigma$ | {p.sigma:.6f} | ATM curvature |
-"""
+    | Parameter | Value | Meaning |
+    |-----------|------:|--------|
+    | $a$ | {p.a:.6f} | Vertical shift |
+    | $b$ | {p.b:.6f} | Wing slope |
+    | $\\rho$ | {p.rho:.6f} | Skew |
+    | $m$ | {p.m:.6f} | Horizontal shift |
+    | $\\sigma$ | {p.sigma:.6f} | ATM curvature |
+    """
     _diag_table = f"""
-### Fit Diagnostics
+    ### Fit Diagnostics
 
-| Metric | Value |
-|--------|------:|
-| **RMSE** | {svi_result.rmse:.2e} |
-| **Converged** | {"Yes" if svi_result.success else "No"} |
-"""
+    | Metric | Value |
+    |--------|------:|
+    | **RMSE** | {svi_result.rmse:.2e} |
+    | **Converged** | {"Yes" if svi_result.success else "No"} |
+    """
     mo.hstack(
         [mo.md(_params_table), mo.md(_diag_table)],
         justify="start",
@@ -536,23 +519,23 @@ def cell_sabr_fit(sd_vols):
     sp = sabr_result.params
 
     _params_table = f"""
-### SABR Parameters
+    ### SABR Parameters
 
-| Parameter | Value | Meaning |
-|-----------|------:|--------|
-| $\\alpha$ | {sp.alpha:.6f} | Initial vol |
-| $\\beta$ | {sp.beta:.6f} | CEV exponent |
-| $\\rho$ | {sp.rho:.6f} | Correlation |
-| $\\nu$ | {sp.nu:.6f} | Vol-of-vol |
-"""
+    | Parameter | Value | Meaning |
+    |-----------|------:|--------|
+    | $\\alpha$ | {sp.alpha:.6f} | Initial vol |
+    | $\\beta$ | {sp.beta:.6f} | CEV exponent |
+    | $\\rho$ | {sp.rho:.6f} | Correlation |
+    | $\\nu$ | {sp.nu:.6f} | Vol-of-vol |
+    """
     _diag_table = f"""
-### Fit Diagnostics
+    ### Fit Diagnostics
 
-| Metric | Value |
-|--------|------:|
-| **RMSE** | {sabr_result.rmse:.2e} |
-| **Converged** | {"Yes" if sabr_result.success else "No"} |
-"""
+    | Metric | Value |
+    |--------|------:|
+    | **RMSE** | {sabr_result.rmse:.2e} |
+    | **Converged** | {"Yes" if sabr_result.success else "No"} |
+    """
     mo.hstack(
         [mo.md(_params_table), mo.md(_diag_table)],
         justify="start",
@@ -562,7 +545,7 @@ def cell_sabr_fit(sd_vols):
 
 
 @app.cell(hide_code=True)
-def cell_sabr_plot(sd_vols, sabr_result):
+def cell_sabr_plot(sabr_result, sd_vols):
     """Overlay SABR fit on market vols."""
     _fwd = sd_vols.metadata.forward
     _k_fine = np.linspace(sd_vols.x.min() * 0.95, sd_vols.x.max() * 1.05, 300)
