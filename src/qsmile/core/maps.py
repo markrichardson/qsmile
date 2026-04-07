@@ -42,10 +42,16 @@ Y_LADDER: list[YCoord] = [
 
 
 def _fixed_to_moneyness(x: NDArray[np.float64], meta: SmileMetadata) -> NDArray[np.float64]:
+    if meta.forward is None:
+        msg = "forward is required for FixedStrike to MoneynessStrike transform"
+        raise TypeError(msg)
     return x / meta.forward
 
 
 def _moneyness_to_fixed(x: NDArray[np.float64], meta: SmileMetadata) -> NDArray[np.float64]:
+    if meta.forward is None:
+        msg = "forward is required for MoneynessStrike to FixedStrike transform"
+        raise TypeError(msg)
     return x * meta.forward
 
 
@@ -101,6 +107,9 @@ def _vol_to_price(y: NDArray[np.float64], x: NDArray[np.float64], meta: SmileMet
     """
     from qsmile.core.black76 import black76_call
 
+    if meta.forward is None or meta.discount_factor is None:
+        msg = "forward and discount_factor are required for vol-to-price transform"
+        raise TypeError(msg)
     return np.asarray(
         black76_call(meta.forward, x, meta.discount_factor, y, meta.expiry),
         dtype=np.float64,
@@ -114,6 +123,9 @@ def _price_to_vol(y: NDArray[np.float64], x: NDArray[np.float64], meta: SmileMet
     """
     from qsmile.core.black76 import black76_implied_vol
 
+    if meta.forward is None or meta.discount_factor is None:
+        msg = "forward and discount_factor are required for price-to-vol transform"
+        raise TypeError(msg)
     n = len(y)
     result = np.empty(n, dtype=np.float64)
     for i in range(n):
