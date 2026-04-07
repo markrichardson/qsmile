@@ -283,6 +283,46 @@ class TestDenoise:
         clean2 = chain2.denoise()
         assert data["strikes"][bad_idx] not in clean2.strikes
 
+    def test_removes_sub_intrinsic_put_bid(self):
+        """Strike where put bid < D*(K-F) intrinsic should be removed.
+
+        This catches deep OTM strikes where the put bid is stale and sits
+        below theoretical intrinsic, even though the put mid may be above it.
+        """
+        data = _make_prices()
+        chain = OptionChain(**data)
+        F = chain.forward
+        D = chain.discount_factor
+        # Pick a deep ITM put (high strike)
+        bad_idx = -1
+        K = data["strikes"][bad_idx]
+        intrinsic = D * (K - F)
+        # Set put bid just below intrinsic, ask well above so mid is OK
+        data2 = {k: v.copy() if isinstance(v, np.ndarray) else v for k, v in data.items()}
+        data2["put_bid"][bad_idx] = intrinsic - 1.0
+        data2["put_ask"][bad_idx] = intrinsic + 50.0
+        chain2 = OptionChain(**data2)
+        clean2 = chain2.denoise()
+        assert data["strikes"][bad_idx] not in clean2.strikes
+
+    def test_removes_sub_intrinsic_call_bid(self):
+        """Strike where call bid < D*(F-K) intrinsic should be removed."""
+        data = _make_prices()
+        chain = OptionChain(**data)
+        F = chain.forward
+        D = chain.discount_factor
+        # Pick a deep ITM call (low strike)
+        bad_idx = 0
+        K = data["strikes"][bad_idx]
+        intrinsic = D * (F - K)
+        # Set call bid just below intrinsic, ask well above so mid is OK
+        data2 = {k: v.copy() if isinstance(v, np.ndarray) else v for k, v in data.items()}
+        data2["call_bid"][bad_idx] = intrinsic - 1.0
+        data2["call_ask"][bad_idx] = intrinsic + 50.0
+        chain2 = OptionChain(**data2)
+        clean2 = chain2.denoise()
+        assert data["strikes"][bad_idx] not in clean2.strikes
+
 
 class TestDeltaBlendIvols:
     """Tests for delta_blend_ivols blending function."""

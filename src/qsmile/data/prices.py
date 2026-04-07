@@ -395,9 +395,9 @@ class OptionChain:
         3. **Call- and put-mid monotonicity** -- call mids must be non-increasing
            and put mids non-decreasing in strike.  Any remaining violations are
            removed.
-        4. **Sub-intrinsic filter** -- removes strikes where call or put mid
-           prices fall below their intrinsic value (using the calibrated
-           forward), which indicates illiquid deep-ITM quotes.
+        4. **Sub-intrinsic filter** -- removes strikes where the call or put
+           **bid** falls below intrinsic value (using the calibrated forward),
+           which indicates illiquid deep-ITM or stale quotes.
         5. **Parity residual filter** -- removes strikes where the put-call
            parity residual |C_mid - P_mid - D*(F - K)| exceeds 3x the
            combined half bid-ask spread, indicating a stale or mispriced
@@ -455,14 +455,14 @@ class OptionChain:
         keep[keep_indices[~put_keep]] = False
 
         # 4. Sub-intrinsic filter: calibrate F on clean data, then remove
-        #    strikes where the mid price is below intrinsic value
+        #    strikes where the bid price is below intrinsic value
         clean_strikes = self.strikes[keep]
         clean_c_mid = self.call_mid[keep]
         clean_p_mid = self.put_mid[keep]
         f_est, d_est = _calibrate_forward_df(clean_strikes, clean_c_mid, clean_p_mid)
-        call_intrinsic = np.maximum(f_est - clean_strikes, 0.0)
-        put_intrinsic = np.maximum(clean_strikes - f_est, 0.0)
-        intrinsic_ok = (clean_c_mid >= call_intrinsic) & (clean_p_mid >= put_intrinsic)
+        call_intrinsic = d_est * np.maximum(f_est - clean_strikes, 0.0)
+        put_intrinsic = d_est * np.maximum(clean_strikes - f_est, 0.0)
+        intrinsic_ok = (self.call_bid[keep] >= call_intrinsic) & (self.put_bid[keep] >= put_intrinsic)
         keep_indices = np.where(keep)[0]
         keep[keep_indices[~intrinsic_ok]] = False
 
