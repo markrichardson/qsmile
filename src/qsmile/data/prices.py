@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import contextlib
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING
 
 import cvxpy as cp
 import numpy as np
 from numpy.typing import NDArray
 from scipy.stats import norm
+
+from qsmile.data.meta import SmileMetadata
 
 if TYPE_CHECKING:
     import matplotlib.figure
@@ -178,12 +180,10 @@ class OptionChain:
         Put bid prices. Must be non-negative.
     put_ask : NDArray[np.float64]
         Put ask prices. Must be >= put_bid.
-    expiry : float
-        Time to expiry in years. Must be positive.
-    forward : float | None
-        Forward price. Calibrated from put-call parity if not provided.
-    discount_factor : float | None
-        Discount factor. Calibrated from put-call parity if not provided.
+    metadata : SmileMetadata
+        Smile metadata. ``expiry`` must be provided.
+        ``forward`` and ``discount_factor`` are calibrated from
+        put-call parity if ``None``.
     """
 
     strikes: NDArray[np.float64]
@@ -191,9 +191,9 @@ class OptionChain:
     call_ask: NDArray[np.float64]
     put_bid: NDArray[np.float64]
     put_ask: NDArray[np.float64]
-    expiry: float
-    forward: float | None = field(default=None)
-    discount_factor: float | None = field(default=None)
+    metadata: SmileMetadata
+    volume: NDArray[np.float64] | None = field(default=None)
+    open_interest: NDArray[np.float64] | None = field(default=None)
 
     def __post_init__(self) -> None:
         """Validate and convert inputs, calibrate forward/DF if needed."""
@@ -220,9 +220,6 @@ class OptionChain:
         if np.any(self.strikes <= 0):
             msg = "all strikes must be positive"
             raise ValueError(msg)
-        if self.expiry <= 0:
-            msg = f"expiry must be positive, got {self.expiry}"
-            raise ValueError(msg)
 
         for name, arr in [
             ("call_bid", self.call_bid),
@@ -241,13 +238,27 @@ class OptionChain:
             msg = "put_bid must not exceed put_ask"
             raise ValueError(msg)
 
+        for attr in ("volume", "open_interest"):
+            arr = getattr(self, attr)
+            if arr is not None:
+                arr = np.asarray(arr, dtype=np.float64)
+                setattr(self, attr, arr)
+                if len(arr) != n:
+                    msg = f"{attr} must have the same length as strikes ({n}), got {len(arr)}"
+                    raise ValueError(msg)
+                if np.any(arr < 0):
+                    msg = f"{attr} must be non-negative"
+                    raise ValueError(msg)
+
         # Calibrate forward and discount factor if not provided
-        if self.forward is None or self.discount_factor is None:
+        meta = self.metadata
+        if meta.forward is None or meta.discount_factor is None:
             f_cal, d_cal = _calibrate_forward_df(self.strikes, self.call_mid, self.put_mid)
-            if self.forward is None:
-                self.forward = f_cal
-            if self.discount_factor is None:
-                self.discount_factor = d_cal
+            self.metadata = replace(
+                meta,
+                forward=meta.forward if meta.forward is not None else f_cal,
+                discount_factor=meta.discount_factor if meta.discount_factor is not None else d_cal,
+            )
 
     @property
     def call_mid(self) -> NDArray[np.float64]:
@@ -260,31 +271,6 @@ class OptionChain:
         return (self.put_bid + self.put_ask) / 2.0
 
     def to_smile_data(self) -> SmileData:
-        """Convert to a SmileData with (FixedStrike, Price) coordinates.
-
-        Uses call mid-market prices as the Y-values.
-        """
-        from qsmile.core.coords import XCoord, YCoord
-        from qsmile.data.meta import SmileMetadata
-        from qsmile.data.vols import SmileData
-
-        assert self.forward is not None  # noqa: S101
-        assert self.discount_factor is not None  # noqa: S101
-
-        return SmileData(
-            x=self.strikes.copy(),
-            y_bid=self.call_bid.copy(),
-            y_ask=self.call_ask.copy(),
-            x_coord=XCoord.FixedStrike,
-            y_coord=YCoord.Price,
-            metadata=SmileMetadata(
-                forward=self.forward,
-                discount_factor=self.discount_factor,
-                expiry=self.expiry,
-            ),
-        )
-
-    def to_smile_data_blended(self) -> SmileData:
         """Convert to a SmileData with (FixedStrike, Volatility) using delta-blended vols.
 
         Inverts both call and put prices to implied vols at every strike, then
@@ -295,11 +281,12 @@ class OptionChain:
         """
         from qsmile.core.black76 import black76_implied_vol
         from qsmile.core.coords import XCoord, YCoord
-        from qsmile.data.meta import SmileMetadata
         from qsmile.data.vols import SmileData
 
-        assert self.forward is not None  # noqa: S101
-        assert self.discount_factor is not None  # noqa: S101
+        meta = self.metadata
+        if meta.forward is None or meta.discount_factor is None:
+            msg = "forward and discount_factor must be calibrated before to_smile_data()"
+            raise TypeError(msg)
 
         n = len(self.strikes)
 
@@ -313,19 +300,19 @@ class OptionChain:
             k = float(self.strikes[i])
             with contextlib.suppress(ValueError):
                 call_bid_iv[i] = black76_implied_vol(
-                    float(self.call_bid[i]), self.forward, k, self.discount_factor, self.expiry, is_call=True
+                    float(self.call_bid[i]), meta.forward, k, meta.discount_factor, meta.texpiry, is_call=True
                 )
             with contextlib.suppress(ValueError):
                 call_ask_iv[i] = black76_implied_vol(
-                    float(self.call_ask[i]), self.forward, k, self.discount_factor, self.expiry, is_call=True
+                    float(self.call_ask[i]), meta.forward, k, meta.discount_factor, meta.texpiry, is_call=True
                 )
             with contextlib.suppress(ValueError):
                 put_bid_iv[i] = black76_implied_vol(
-                    float(self.put_bid[i]), self.forward, k, self.discount_factor, self.expiry, is_call=False
+                    float(self.put_bid[i]), meta.forward, k, meta.discount_factor, meta.texpiry, is_call=False
                 )
             with contextlib.suppress(ValueError):
                 put_ask_iv[i] = black76_implied_vol(
-                    float(self.put_ask[i]), self.forward, k, self.discount_factor, self.expiry, is_call=False
+                    float(self.put_ask[i]), meta.forward, k, meta.discount_factor, meta.texpiry, is_call=False
                 )
 
         # Blend using delta weights
@@ -335,8 +322,8 @@ class OptionChain:
             put_bid_iv,
             put_ask_iv,
             self.strikes,
-            self.forward,
-            self.expiry,
+            meta.forward,
+            meta.texpiry,
         )
 
         # Exclude strikes where neither vol is available
@@ -347,7 +334,7 @@ class OptionChain:
 
         # Derive sigma_atm from blended mid at ATM strike
         mid_out = (bid_out + ask_out) / 2.0
-        atm_idx = int(np.argmin(np.abs(strikes_out - self.forward)))
+        atm_idx = int(np.argmin(np.abs(strikes_out - meta.forward)))
         sigma_atm = float(mid_out[atm_idx])
 
         return SmileData(
@@ -356,15 +343,12 @@ class OptionChain:
             y_ask=ask_out,
             x_coord=XCoord.FixedStrike,
             y_coord=YCoord.Volatility,
-            metadata=SmileMetadata(
-                forward=self.forward,
-                discount_factor=self.discount_factor,
-                expiry=self.expiry,
-                sigma_atm=sigma_atm,
-            ),
+            metadata=replace(meta, sigma_atm=sigma_atm),
+            volume=self.volume[valid] if self.volume is not None else None,
+            open_interest=self.open_interest[valid] if self.open_interest is not None else None,
         )
 
-    def denoise(self) -> OptionChain:
+    def filter(self) -> OptionChain:
         """Return a cleaned copy with stale and implausible quotes removed.
 
         Applies five filters in sequence:
@@ -377,9 +361,9 @@ class OptionChain:
         3. **Call- and put-mid monotonicity** -- call mids must be non-increasing
            and put mids non-decreasing in strike.  Any remaining violations are
            removed.
-        4. **Sub-intrinsic filter** -- removes strikes where call or put mid
-           prices fall below their intrinsic value (using the calibrated
-           forward), which indicates illiquid deep-ITM quotes.
+        4. **Sub-intrinsic filter** -- removes strikes where the call or put
+           **bid** falls below intrinsic value (using the calibrated forward),
+           which indicates illiquid deep-ITM or stale quotes.
         5. **Parity residual filter** -- removes strikes where the put-call
            parity residual |C_mid - P_mid - D*(F - K)| exceeds 3x the
            combined half bid-ask spread, indicating a stale or mispriced
@@ -437,14 +421,14 @@ class OptionChain:
         keep[keep_indices[~put_keep]] = False
 
         # 4. Sub-intrinsic filter: calibrate F on clean data, then remove
-        #    strikes where the mid price is below intrinsic value
+        #    strikes where the bid price is below intrinsic value
         clean_strikes = self.strikes[keep]
         clean_c_mid = self.call_mid[keep]
         clean_p_mid = self.put_mid[keep]
         f_est, d_est = _calibrate_forward_df(clean_strikes, clean_c_mid, clean_p_mid)
-        call_intrinsic = np.maximum(f_est - clean_strikes, 0.0)
-        put_intrinsic = np.maximum(clean_strikes - f_est, 0.0)
-        intrinsic_ok = (clean_c_mid >= call_intrinsic) & (clean_p_mid >= put_intrinsic)
+        call_intrinsic = d_est * np.maximum(f_est - clean_strikes, 0.0)
+        put_intrinsic = d_est * np.maximum(clean_strikes - f_est, 0.0)
+        intrinsic_ok = (self.call_bid[keep] >= call_intrinsic) & (self.put_bid[keep] >= put_intrinsic)
         keep_indices = np.where(keep)[0]
         keep[keep_indices[~intrinsic_ok]] = False
 
@@ -475,8 +459,11 @@ class OptionChain:
             call_ask=self.call_ask[keep],
             put_bid=self.put_bid[keep],
             put_ask=self.put_ask[keep],
-            expiry=self.expiry,
-            # Re-calibrate forward/DF on the clean data
+            metadata=SmileMetadata(
+                date=self.metadata.date, expiry=self.metadata.expiry, daycount=self.metadata.daycount
+            ),
+            volume=self.volume[keep] if self.volume is not None else None,
+            open_interest=self.open_interest[keep] if self.open_interest is not None else None,
         )
 
     def plot(self, *, title: str = "Option Chain Prices") -> matplotlib.figure.Figure:

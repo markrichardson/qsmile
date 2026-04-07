@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import numpy as np
+import pandas as pd
 
 from qsmile.data.vols import SmileData
 from qsmile.models.fitting import SmileResult, fit
 from qsmile.models.sabr import SABRModel
 
 # Known-good SABR parameters for synthetic round-trip tests
-_TRUE_PARAMS = SABRModel(alpha=0.2, beta=0.5, rho=-0.3, nu=0.4, expiry=1.0, forward=100.0)
+_DATE = pd.Timestamp("2024-01-01")
+_EXPIRY = pd.Timestamp("2025-01-01")
+_TEXPIRY = (_EXPIRY - _DATE).days / 365.0
+_TRUE_PARAMS = SABRModel(alpha=0.2, beta=0.5, rho=-0.3, nu=0.4, expiry=_TEXPIRY, forward=100.0)
 
 
 def _make_synthetic_sabr_sd(
@@ -24,7 +28,7 @@ def _make_synthetic_sabr_sd(
     ivs = params.evaluate(k)
     # Ensure ivs is an array
     ivs = np.asarray(ivs, dtype=np.float64)
-    return SmileData.from_mid_vols(strikes=strikes, ivs=ivs, forward=params.forward, expiry=params.expiry)
+    return SmileData.from_mid_vols(strikes=strikes, ivs=ivs, forward=params.forward, date=_DATE, expiry=_EXPIRY)
 
 
 class TestFitSABRSyntheticRoundTrip:
@@ -69,7 +73,8 @@ class TestFitSABRNoisyData:
             strikes=sd.x,
             ivs=noisy_ivs,
             forward=_TRUE_PARAMS.forward,
-            expiry=_TRUE_PARAMS.expiry,
+            date=pd.Timestamp("2024-01-01"),
+            expiry=pd.Timestamp("2025-01-01"),
         )
         result = fit(sd_noisy, SABRModel)
 
@@ -80,7 +85,7 @@ class TestFitSABRNoisyData:
 class TestFitSABRCustomInitialGuess:
     def test_custom_initial_params(self):
         sd = _make_synthetic_sabr_sd(n_strikes=15, strike_lo=85.0, strike_hi=115.0)
-        guess = SABRModel(alpha=0.15, beta=0.4, rho=-0.2, nu=0.3, expiry=1.0, forward=100.0)
+        guess = SABRModel(alpha=0.15, beta=0.4, rho=-0.2, nu=0.3, expiry=_TEXPIRY, forward=100.0)
         result = fit(sd, SABRModel, initial_guess=guess)
 
         assert result.success

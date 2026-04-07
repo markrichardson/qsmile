@@ -1344,6 +1344,7 @@ source = { editable = "." }
 dependencies = [
     { name = "cvxpy" },
     { name = "numpy" },
+    { name = "pandas" },
     { name = "scipy" },
 ]
 
@@ -1367,6 +1368,7 @@ requires-dist = [
     { name = "cvxpy", specifier = ">=1.6.0,<2.0" },
     { name = "matplotlib", marker = "extra == 'plot'", specifier = ">=3.9.0,<4.0" },
     { name = "numpy", specifier = ">=2.4.0,<3.0" },
+    { name = "pandas", specifier = ">=2.0,<3.1" },
     { name = "scipy", specifier = ">=1.14.0,<2.0" },
 ]
 provides-extras = ["plot"]

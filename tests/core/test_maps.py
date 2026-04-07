@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pandas as pd
 import pytest
 
 from qsmile.core.coords import XCoord, YCoord
@@ -14,7 +15,13 @@ from qsmile.core.maps import (
 )
 from qsmile.data.meta import SmileMetadata
 
-META = SmileMetadata(forward=100.0, discount_factor=0.99, expiry=0.25, sigma_atm=0.20)
+META = SmileMetadata(
+    date=pd.Timestamp("2024-01-01"),
+    expiry=pd.Timestamp("2024-04-01"),
+    forward=100.0,
+    discount_factor=0.99,
+    sigma_atm=0.20,
+)
 STRIKES = np.array([90.0, 95.0, 100.0, 105.0, 110.0])
 
 
@@ -46,12 +53,12 @@ class TestXMaps:
         log_m = np.log(STRIKES / META.forward)
         chain = compose_x_maps(XCoord.LogMoneynessStrike, XCoord.StandardisedStrike)
         result = apply_x_chain(log_m, chain, META)
-        expected = log_m / (META.sigma_atm * np.sqrt(META.expiry))
+        expected = log_m / (META.sigma_atm * np.sqrt(META.texpiry))
         np.testing.assert_allclose(result, expected)
 
     def test_standardised_to_log_moneyness(self) -> None:
         log_m = np.log(STRIKES / META.forward)
-        std = log_m / (META.sigma_atm * np.sqrt(META.expiry))
+        std = log_m / (META.sigma_atm * np.sqrt(META.texpiry))
         chain = compose_x_maps(XCoord.StandardisedStrike, XCoord.LogMoneynessStrike)
         result = apply_x_chain(std, chain, META)
         np.testing.assert_allclose(result, log_m)
@@ -64,7 +71,9 @@ class TestXMaps:
         np.testing.assert_allclose(recovered, STRIKES, rtol=1e-12)
 
     def test_standardised_requires_sigma_atm(self) -> None:
-        meta_no_atm = SmileMetadata(forward=100.0, discount_factor=0.99, expiry=0.25)
+        meta_no_atm = SmileMetadata(
+            date=pd.Timestamp("2024-01-01"), expiry=pd.Timestamp("2024-04-01"), forward=100.0, discount_factor=0.99
+        )
         log_m = np.log(STRIKES / meta_no_atm.forward)
         chain = compose_x_maps(XCoord.LogMoneynessStrike, XCoord.StandardisedStrike)
         with pytest.raises(ValueError, match="sigma_atm is required"):
@@ -88,13 +97,13 @@ class TestYMaps:
         variances = np.array([0.04, 0.05, 0.06, 0.07, 0.08])
         chain = compose_y_maps(YCoord.Variance, YCoord.TotalVariance)
         result = apply_y_chain(variances, STRIKES, chain, META, XCoord.FixedStrike, XCoord.FixedStrike)
-        np.testing.assert_allclose(result, variances * META.expiry)
+        np.testing.assert_allclose(result, variances * META.texpiry)
 
     def test_total_variance_to_variance(self) -> None:
         total_var = np.array([0.01, 0.012, 0.015, 0.018, 0.02])
         chain = compose_y_maps(YCoord.TotalVariance, YCoord.Variance)
         result = apply_y_chain(total_var, STRIKES, chain, META, XCoord.FixedStrike, XCoord.FixedStrike)
-        np.testing.assert_allclose(result, total_var / META.expiry)
+        np.testing.assert_allclose(result, total_var / META.texpiry)
 
     def test_vol_to_price_and_back(self) -> None:
         vols = np.array([0.20, 0.20, 0.20, 0.20, 0.20])

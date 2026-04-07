@@ -2,16 +2,18 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING
 
 import numpy as np
+import pandas as pd
 from numpy.typing import NDArray
 
 if TYPE_CHECKING:
     import matplotlib.figure
 
 from qsmile.core.coords import XCoord, YCoord
+from qsmile.core.daycount import DayCount
 from qsmile.core.maps import (
     apply_x_chain,
     apply_y_chain,
@@ -47,6 +49,8 @@ class SmileData:
     x_coord: XCoord
     y_coord: YCoord
     metadata: SmileMetadata
+    volume: NDArray[np.float64] | None = field(default=None)
+    open_interest: NDArray[np.float64] | None = field(default=None)
 
     def __post_init__(self) -> None:
         """Validate and convert inputs."""
@@ -78,6 +82,18 @@ class SmileData:
         ):
             msg = f"y values must be non-negative for {self.y_coord.name}"
             raise ValueError(msg)
+
+        for attr in ("volume", "open_interest"):
+            arr = getattr(self, attr)
+            if arr is not None:
+                arr = np.asarray(arr, dtype=np.float64)
+                setattr(self, attr, arr)
+                if len(arr) != n:
+                    msg = f"{attr} must have the same length as x ({n}), got {len(arr)}"
+                    raise ValueError(msg)
+                if np.any(arr < 0):
+                    msg = f"{attr} must be non-negative"
+                    raise ValueError(msg)
 
     @property
     def y_mid(self) -> NDArray[np.float64]:
@@ -111,6 +127,9 @@ class SmileData:
         # If we now have vols in FixedStrike and sigma_atm is missing, derive it
         metadata = self.metadata
         if target_y == YCoord.Volatility and target_x == XCoord.FixedStrike and metadata.sigma_atm is None:
+            if metadata.forward is None:
+                msg = "forward is required to derive sigma_atm"
+                raise TypeError(msg)
             atm_idx = int(np.argmin(np.abs(new_x - metadata.forward)))
             sigma_atm = float((new_y_bid[atm_idx] + new_y_ask[atm_idx]) / 2.0)
             metadata = replace(metadata, sigma_atm=sigma_atm)
@@ -122,6 +141,8 @@ class SmileData:
             x_coord=target_x,
             y_coord=target_y,
             metadata=metadata,
+            volume=self.volume.copy() if self.volume is not None else None,
+            open_interest=self.open_interest.copy() if self.open_interest is not None else None,
         )
 
     @classmethod
@@ -130,8 +151,10 @@ class SmileData:
         strikes: NDArray[np.float64],
         ivs: NDArray[np.float64],
         forward: float,
-        expiry: float,
+        date: pd.Timestamp,
+        expiry: pd.Timestamp,
         discount_factor: float = 1.0,
+        daycount: DayCount = DayCount.ACT365,
     ) -> SmileData:
         """Create from mid implied vols (setting y_bid = y_ask = ivs).
 
@@ -143,10 +166,14 @@ class SmileData:
             Mid implied volatilities.
         forward : float
             Forward price.
-        expiry : float
-            Time to expiry in years.
+        date : pd.Timestamp
+            Valuation date.
+        expiry : pd.Timestamp
+            Expiry date.
         discount_factor : float
             Discount factor, defaults to 1.0.
+        daycount : DayCount
+            Day-count convention, defaults to ACT365.
         """
         strikes = np.asarray(strikes, dtype=np.float64)
         ivs = np.asarray(ivs, dtype=np.float64)
@@ -159,9 +186,11 @@ class SmileData:
             x_coord=XCoord.FixedStrike,
             y_coord=YCoord.Volatility,
             metadata=SmileMetadata(
+                date=date,
+                expiry=expiry,
+                daycount=daycount,
                 forward=forward,
                 discount_factor=discount_factor,
-                expiry=expiry,
                 sigma_atm=sigma_atm,
             ),
         )

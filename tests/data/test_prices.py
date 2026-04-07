@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import numpy as np
+import pandas as pd
 import pytest
 
 from qsmile.core.black76 import black76_call, black76_put
 from qsmile.core.coords import XCoord, YCoord
+from qsmile.data.meta import SmileMetadata
 from qsmile.data.prices import OptionChain, _calibrate_forward_df, delta_blend_ivols
 
 
@@ -42,9 +44,12 @@ def _make_prices(
         "call_ask": call_ask,
         "put_bid": put_bid,
         "put_ask": put_ask,
-        "expiry": expiry,
-        "forward": forward,
-        "discount_factor": discount_factor,
+        "metadata": SmileMetadata(
+            date=pd.Timestamp("2024-01-01"),
+            expiry=pd.Timestamp("2024-07-01"),
+            forward=forward,
+            discount_factor=discount_factor,
+        ),
     }
 
 
@@ -53,8 +58,8 @@ class TestOptionChainConstruction:
         data = _make_prices()
         chain = OptionChain(**data)
         assert isinstance(chain.strikes, np.ndarray)
-        assert chain.forward == 100.0
-        assert chain.discount_factor == 0.98
+        assert chain.metadata.forward == 100.0
+        assert chain.metadata.discount_factor == 0.98
 
     def test_from_lists(self):
         data = _make_prices()
@@ -64,9 +69,7 @@ class TestOptionChainConstruction:
             call_ask=list(data["call_ask"]),
             put_bid=list(data["put_bid"]),
             put_ask=list(data["put_ask"]),
-            expiry=data["expiry"],
-            forward=data["forward"],
-            discount_factor=data["discount_factor"],
+            metadata=data["metadata"],
         )
         assert chain.strikes.dtype == np.float64
 
@@ -98,8 +101,18 @@ class TestOptionChainValidation:
 
     def test_non_positive_expiry(self):
         data = _make_prices()
-        with pytest.raises(ValueError, match="expiry must be positive"):
-            OptionChain(**{**data, "expiry": 0.0})
+        with pytest.raises(ValueError, match="expiry must be after date"):
+            OptionChain(
+                **{
+                    **data,
+                    "metadata": SmileMetadata(
+                        date=pd.Timestamp("2024-07-01"),
+                        expiry=pd.Timestamp("2024-01-01"),
+                        forward=100.0,
+                        discount_factor=0.98,
+                    ),
+                }
+            )
 
     def test_fewer_than_three_strikes(self):
         with pytest.raises(ValueError, match="at least 3"):
@@ -109,9 +122,12 @@ class TestOptionChainValidation:
                 call_ask=[6.0, 3.0],
                 put_bid=[2.0, 5.0],
                 put_ask=[3.0, 6.0],
-                expiry=0.5,
-                forward=100.0,
-                discount_factor=1.0,
+                metadata=SmileMetadata(
+                    date=pd.Timestamp("2024-01-01"),
+                    expiry=pd.Timestamp("2024-07-01"),
+                    forward=100.0,
+                    discount_factor=1.0,
+                ),
             )
 
 
@@ -144,10 +160,10 @@ class TestCalibration:
             call_ask=data["call_ask"],
             put_bid=data["put_bid"],
             put_ask=data["put_ask"],
-            expiry=data["expiry"],
+            metadata=SmileMetadata(date=data["metadata"].date, expiry=data["metadata"].expiry),
         )
-        assert chain.forward == pytest.approx(100.0, rel=1e-3)
-        assert chain.discount_factor == pytest.approx(0.98, rel=1e-2)
+        assert chain.metadata.forward == pytest.approx(100.0, rel=1e-3)
+        assert chain.metadata.discount_factor == pytest.approx(0.98, rel=1e-2)
 
 
 class TestMidPrices:
@@ -164,26 +180,14 @@ class TestMidPrices:
         np.testing.assert_allclose(chain.put_mid, expected)
 
 
-class TestToSmileDataPriceToVol:
-    def test_price_to_vol_via_smile_data(self):
-        data = _make_prices(vol=0.25, spread=0.01)
-        chain = OptionChain(**data)
-        sd = chain.to_smile_data()
-        sd_vols = sd.transform(XCoord.FixedStrike, YCoord.Volatility)
-        # Mid vols should be close to 0.25
-        np.testing.assert_allclose(sd_vols.y_mid, 0.25, atol=0.002)
-        # Spread should be preserved
-        assert np.all(sd_vols.y_ask >= sd_vols.y_bid)
-
-
 class TestDenoise:
-    """Tests for OptionChain.denoise()."""
+    """Tests for OptionChain.filter()."""
 
     def test_clean_data_unchanged(self):
         """Denoise on clean synthetic data should keep all strikes."""
         data = _make_prices()
         chain = OptionChain(**data)
-        clean = chain.denoise()
+        clean = chain.filter()
         assert len(clean.strikes) == len(chain.strikes)
         np.testing.assert_array_equal(clean.strikes, chain.strikes)
 
@@ -191,7 +195,7 @@ class TestDenoise:
         """Denoise must return a new OptionChain, not mutate in place."""
         data = _make_prices()
         chain = OptionChain(**data)
-        clean = chain.denoise()
+        clean = chain.filter()
         assert clean is not chain
 
     def test_removes_zero_bid_call(self):
@@ -200,7 +204,7 @@ class TestDenoise:
         data["call_bid"][0] = 0.0
         data["call_ask"][0] = data["call_bid"][0] + 0.01
         chain = OptionChain(**data)
-        clean = chain.denoise()
+        clean = chain.filter()
         assert data["strikes"][0] not in clean.strikes
 
     def test_removes_zero_bid_put(self):
@@ -208,7 +212,7 @@ class TestDenoise:
         data = _make_prices()
         data["put_bid"][-1] = 0.0
         chain = OptionChain(**data)
-        clean = chain.denoise()
+        clean = chain.filter()
         assert data["strikes"][-1] not in clean.strikes
 
     def test_removes_parity_violation(self):
@@ -221,7 +225,7 @@ class TestDenoise:
         data2["call_bid"][bad_idx] += 50.0
         data2["call_ask"][bad_idx] += 50.0
         chain2 = OptionChain(**data2)
-        clean2 = chain2.denoise()
+        clean2 = chain2.filter()
         assert data["strikes"][bad_idx] not in clean2.strikes
 
     def test_removes_non_monotone_call(self):
@@ -231,11 +235,11 @@ class TestDenoise:
         data["call_bid"][4] = data["call_bid"][3] + 5.0
         data["call_ask"][4] = data["call_ask"][3] + 5.0
         chain = OptionChain(**data)
-        clean = chain.denoise()
+        clean = chain.filter()
         assert data["strikes"][4] not in clean.strikes
 
-    def test_monotonicity_after_denoise(self):
-        """After denoise, all monotonicity properties must hold."""
+    def test_monotonicity_after_filter(self):
+        """After filter, all monotonicity properties must hold."""
         data = _make_prices()
         # Inject multiple kinds of noise
         data["call_bid"][1] += 20.0
@@ -243,7 +247,7 @@ class TestDenoise:
         data["put_bid"][-2] += 20.0
         data["put_ask"][-2] += 20.0
         chain = OptionChain(**data)
-        clean = chain.denoise()
+        clean = chain.filter()
         parity = clean.call_mid - clean.put_mid
         assert np.all(np.diff(parity) <= 0), "parity not monotone"
         assert np.all(np.diff(clean.call_mid) <= 0), "call mid not monotone"
@@ -253,15 +257,15 @@ class TestDenoise:
         """The returned chain should have a freshly calibrated forward."""
         data = _make_prices()
         chain = OptionChain(**data)
-        clean = chain.denoise()
+        clean = chain.filter()
         # Forward should still be approximately correct
-        assert clean.forward == pytest.approx(data["forward"], rel=1e-2)
+        assert clean.metadata.forward == pytest.approx(data["metadata"].forward, rel=1e-2)
 
     def test_at_least_three_strikes_remain(self):
         """Denoise on a chain that's too noisy should still produce ≥3 strikes."""
         data = _make_prices()
         chain = OptionChain(**data)
-        clean = chain.denoise()
+        clean = chain.filter()
         assert len(clean.strikes) >= 3
 
     def test_removes_parity_residual_outlier(self):
@@ -280,7 +284,47 @@ class TestDenoise:
         data2["call_bid"][bad_idx] += 10.0
         data2["call_ask"][bad_idx] += 10.0
         chain2 = OptionChain(**data2)
-        clean2 = chain2.denoise()
+        clean2 = chain2.filter()
+        assert data["strikes"][bad_idx] not in clean2.strikes
+
+    def test_removes_sub_intrinsic_put_bid(self):
+        """Strike where put bid < D*(K-F) intrinsic should be removed.
+
+        This catches deep OTM strikes where the put bid is stale and sits
+        below theoretical intrinsic, even though the put mid may be above it.
+        """
+        data = _make_prices()
+        chain = OptionChain(**data)
+        F = chain.metadata.forward
+        D = chain.metadata.discount_factor
+        # Pick a deep ITM put (high strike)
+        bad_idx = -1
+        K = data["strikes"][bad_idx]
+        intrinsic = D * (K - F)
+        # Set put bid just below intrinsic, ask well above so mid is OK
+        data2 = {k: v.copy() if isinstance(v, np.ndarray) else v for k, v in data.items()}
+        data2["put_bid"][bad_idx] = intrinsic - 1.0
+        data2["put_ask"][bad_idx] = intrinsic + 50.0
+        chain2 = OptionChain(**data2)
+        clean2 = chain2.filter()
+        assert data["strikes"][bad_idx] not in clean2.strikes
+
+    def test_removes_sub_intrinsic_call_bid(self):
+        """Strike where call bid < D*(F-K) intrinsic should be removed."""
+        data = _make_prices()
+        chain = OptionChain(**data)
+        F = chain.metadata.forward
+        D = chain.metadata.discount_factor
+        # Pick a deep ITM call (low strike)
+        bad_idx = 0
+        K = data["strikes"][bad_idx]
+        intrinsic = D * (F - K)
+        # Set call bid just below intrinsic, ask well above so mid is OK
+        data2 = {k: v.copy() if isinstance(v, np.ndarray) else v for k, v in data.items()}
+        data2["call_bid"][bad_idx] = intrinsic - 1.0
+        data2["call_ask"][bad_idx] = intrinsic + 50.0
+        chain2 = OptionChain(**data2)
+        clean2 = chain2.filter()
         assert data["strikes"][bad_idx] not in clean2.strikes
 
 
@@ -375,12 +419,12 @@ class TestDeltaBlendIvols:
 
 
 class TestToSmileDataBlended:
-    """Tests for OptionChain.to_smile_data_blended()."""
+    """Tests for OptionChain.to_smile_data()."""
 
     def test_returns_vol_coordinates(self):
         data = _make_prices(vol=0.25, spread=0.005)
         chain = OptionChain(**data)
-        sd = chain.to_smile_data_blended()
+        sd = chain.to_smile_data()
         assert sd.x_coord == XCoord.FixedStrike
         assert sd.y_coord == YCoord.Volatility
 
@@ -388,28 +432,28 @@ class TestToSmileDataBlended:
         """With flat-vol Black76 prices, blended vols should recover the input vol."""
         data = _make_prices(vol=0.25, spread=0.005)
         chain = OptionChain(**data)
-        sd = chain.to_smile_data_blended()
+        sd = chain.to_smile_data()
         np.testing.assert_allclose(sd.y_mid, 0.25, atol=0.002)
 
     def test_sigma_atm_derived(self):
         data = _make_prices(vol=0.25, spread=0.005)
         chain = OptionChain(**data)
-        sd = chain.to_smile_data_blended()
+        sd = chain.to_smile_data()
         assert sd.metadata.sigma_atm is not None
         assert sd.metadata.sigma_atm == pytest.approx(0.25, abs=0.002)
 
     def test_metadata_populated(self):
         data = _make_prices(forward=100.0, discount_factor=0.98)
         chain = OptionChain(**data)
-        sd = chain.to_smile_data_blended()
+        sd = chain.to_smile_data()
         assert sd.metadata.forward == pytest.approx(100.0, rel=1e-3)
         assert sd.metadata.discount_factor == pytest.approx(0.98, rel=1e-2)
-        assert sd.metadata.expiry == data["expiry"]
+        assert sd.metadata.expiry == data["metadata"].expiry
 
     def test_bid_ask_preserved(self):
         data = _make_prices(vol=0.25, spread=0.01)
         chain = OptionChain(**data)
-        sd = chain.to_smile_data_blended()
+        sd = chain.to_smile_data()
         assert np.all(sd.y_ask >= sd.y_bid)
 
 
@@ -475,11 +519,11 @@ class TestInversionFailureFallback:
         assert np.isnan(blended_bid[0])
         assert np.isnan(blended_ask[0])
 
-    def test_to_smile_data_blended_excludes_nan_strikes(self):
-        """to_smile_data_blended excludes strikes where neither vol is available."""
+    def test_to_smile_data_excludes_nan_strikes(self):
+        """to_smile_data excludes strikes where neither vol is available."""
         data = _make_prices(vol=0.25, spread=0.005)
         chain = OptionChain(**data)
-        sd = chain.to_smile_data_blended()
+        sd = chain.to_smile_data()
         assert not np.any(np.isnan(sd.y_bid))
         assert not np.any(np.isnan(sd.y_ask))
         assert len(sd.x) == len(chain.strikes)
@@ -519,16 +563,110 @@ class TestOptionChainToSmileData:
             call_ask=call_ask,
             put_bid=put_bid,
             put_ask=put_ask,
-            expiry=expiry,
-            forward=forward,
-            discount_factor=discount_factor,
+            metadata=SmileMetadata(
+                date=pd.Timestamp("2024-01-01"),
+                expiry=pd.Timestamp("2024-04-01"),
+                forward=forward,
+                discount_factor=discount_factor,
+            ),
         )
         sd = prices.to_smile_data()
         assert sd.x_coord == XCoord.FixedStrike
-        assert sd.y_coord == YCoord.Price
-        np.testing.assert_array_equal(sd.x, prices.strikes)
-        np.testing.assert_array_equal(sd.y_bid, prices.call_bid)
-        np.testing.assert_array_equal(sd.y_ask, prices.call_ask)
-        assert sd.metadata.forward == prices.forward
-        assert sd.metadata.discount_factor == prices.discount_factor
-        assert sd.metadata.expiry == prices.expiry
+        assert sd.y_coord == YCoord.Volatility
+        assert sd.metadata.forward == prices.metadata.forward
+        assert sd.metadata.discount_factor == prices.metadata.discount_factor
+        assert sd.metadata.expiry == prices.metadata.expiry
+
+
+# --- Tests for volume / open_interest on OptionChain ---
+
+
+class TestOptionChainVolumeOpenInterest:
+    def test_default_none(self):
+        data = _make_prices()
+        chain = OptionChain(**data)
+        assert chain.volume is None
+        assert chain.open_interest is None
+
+    def test_with_volume_and_open_interest(self):
+        data = _make_prices()
+        vol = np.arange(1.0, len(data["strikes"]) + 1)
+        oi = np.arange(100.0, 100.0 + len(data["strikes"]))
+        chain = OptionChain(**data, volume=vol, open_interest=oi)
+        np.testing.assert_array_equal(chain.volume, vol)
+        np.testing.assert_array_equal(chain.open_interest, oi)
+
+    def test_coerced_to_float64(self):
+        data = _make_prices()
+        n = len(data["strikes"])
+        chain = OptionChain(**data, volume=list(range(n)), open_interest=list(range(n)))
+        assert chain.volume.dtype == np.float64
+        assert chain.open_interest.dtype == np.float64
+
+    def test_volume_length_mismatch(self):
+        data = _make_prices()
+        with pytest.raises(ValueError, match="volume must have the same length"):
+            OptionChain(**data, volume=np.array([1.0, 2.0]))
+
+    def test_open_interest_length_mismatch(self):
+        data = _make_prices()
+        with pytest.raises(ValueError, match="open_interest must have the same length"):
+            OptionChain(**data, open_interest=np.array([1.0]))
+
+    def test_negative_volume_rejected(self):
+        data = _make_prices()
+        n = len(data["strikes"])
+        bad = np.zeros(n)
+        bad[0] = -1.0
+        with pytest.raises(ValueError, match="volume must be non-negative"):
+            OptionChain(**data, volume=bad)
+
+    def test_negative_open_interest_rejected(self):
+        data = _make_prices()
+        n = len(data["strikes"])
+        bad = np.zeros(n)
+        bad[0] = -1.0
+        with pytest.raises(ValueError, match="open_interest must be non-negative"):
+            OptionChain(**data, open_interest=bad)
+
+
+class TestVolumeOIPassthrough:
+    """Tests for volume/open_interest passthrough through conversions."""
+
+    def _chain_with_vol_oi(self):
+        data = _make_prices()
+        n = len(data["strikes"])
+        vol = np.arange(1.0, n + 1)
+        oi = np.arange(100.0, 100.0 + n)
+        return OptionChain(**data, volume=vol, open_interest=oi)
+
+    def test_to_smile_data_passes_through(self):
+        chain = self._chain_with_vol_oi()
+        sd = chain.to_smile_data()
+        # blended may exclude some strikes, so length may differ
+        assert sd.volume is not None
+        assert sd.open_interest is not None
+        assert len(sd.volume) == len(sd.x)
+        assert len(sd.open_interest) == len(sd.x)
+
+    def test_to_smile_data_none_passes_through(self):
+        data = _make_prices()
+        chain = OptionChain(**data)
+        sd = chain.to_smile_data()
+        assert sd.volume is None
+        assert sd.open_interest is None
+
+    def test_filter_subsets_volume_oi(self):
+        chain = self._chain_with_vol_oi()
+        clean = chain.filter()
+        assert clean.volume is not None
+        assert clean.open_interest is not None
+        assert len(clean.volume) == len(clean.strikes)
+        assert len(clean.open_interest) == len(clean.strikes)
+
+    def test_filter_none_passes_through(self):
+        data = _make_prices()
+        chain = OptionChain(**data)
+        clean = chain.filter()
+        assert clean.volume is None
+        assert clean.open_interest is None

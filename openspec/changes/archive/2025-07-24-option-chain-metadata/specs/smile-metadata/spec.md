@@ -1,4 +1,4 @@
-## ADDED Requirements
+## MODIFIED Requirements
 
 ### Requirement: SmileMetadata stores transform parameters
 The system SHALL provide a `SmileMetadata` frozen dataclass with fields `forward` (`float | None`, default `None`), `discount_factor` (`float | None`, default `None`), `expiry` (`float`), and `sigma_atm` (`float | None`, default `None`). `expiry` SHALL be required and positive. `forward`, `discount_factor`, and `sigma_atm`, when provided, SHALL be positive. `forward` and `discount_factor` being `None` indicates they have not yet been calibrated.

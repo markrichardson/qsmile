@@ -67,7 +67,8 @@ make install
 
 ```python +RHIZA_SKIP
 import numpy as np
-from qsmile import OptionChain, SmileData, SVIModel, XCoord, YCoord, fit
+import pandas as pd
+from qsmile import OptionChain, SmileData, SmileMetadata, SVIModel, XCoord, YCoord, fit
 
 # Bid/ask prices — forward and DF are calibrated automatically
 prices = OptionChain(
@@ -76,18 +77,17 @@ prices = OptionChain(
     call_ask=np.array([21.5, 12.4, 8.0, 4.6, 2.3, 1.0, 0.2]),
     put_bid=np.array([0.1, 0.6, 1.5, 3.1, 5.8, 9.6, 18.8]),
     put_ask=np.array([0.2, 0.8, 1.8, 3.5, 6.2, 10.2, 19.6]),
-    expiry=0.5,
+    metadata=SmileMetadata(date=pd.Timestamp("2024-01-01"), expiry=pd.Timestamp("2024-07-01")),
 )
-print(prices.forward)          # Calibrated forward
-print(prices.discount_factor)  # Calibrated discount factor
+print(prices.metadata.forward)          # Calibrated forward
+print(prices.metadata.discount_factor)  # Calibrated discount factor
 
 # Enter the coordinate transform framework
-sd = prices.to_smile_data()                                      # (FixedStrike, Price)
-sd_vols = sd.transform(XCoord.FixedStrike, YCoord.Volatility)    # → implied vols
-sd_unit = sd_vols.transform(XCoord.StandardisedStrike, YCoord.TotalVariance)  # → unitised
+sd = prices.to_smile_data()                               # (FixedStrike, Volatility)
+sd_unit = sd.transform(XCoord.StandardisedStrike, YCoord.TotalVariance)  # → unitised
 
 # Fit SVI directly from SmileData
-result = fit(sd_vols, model=SVIModel)
+result = fit(sd, model=SVIModel)
 print(result.params)   # Fitted SVIModel
 print(result.rmse)     # Root mean square error
 ```
@@ -96,13 +96,15 @@ print(result.rmse)     # Root mean square error
 
 ```python +RHIZA_SKIP
 import numpy as np
+import pandas as pd
 from qsmile import SmileData, SVIModel, fit
 
 sd = SmileData.from_mid_vols(
     strikes=np.array([80, 90, 100, 110, 120], dtype=float),
     ivs=np.array([0.28, 0.22, 0.18, 0.17, 0.19]),
     forward=100.0,
-    expiry=0.5,
+    date=pd.Timestamp("2024-01-01"),
+    expiry=pd.Timestamp("2024-07-01"),
 )
 
 result = fit(sd, model=SVIModel)

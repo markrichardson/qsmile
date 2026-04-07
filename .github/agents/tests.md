@@ -302,7 +302,7 @@ Tests for the generic `fit()` function:
 Tests for `OptionChain`:
 - Construction and validation
 - Forward/DF calibration from put-call parity
-- `denoise()` filtering
+- `filter()` filtering
 - `to_smile_data()` conversion
 
 ### tests/core/test_maps.py
