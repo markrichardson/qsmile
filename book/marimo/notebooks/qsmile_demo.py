@@ -8,7 +8,7 @@
 #     "pyarrow>=17.0.0",
 #     "scipy>=1.14.0",
 #     "cvxpy>=1.6.0",
-#     "qsmile[plot]",
+#     "qsmile",
 # ]
 #
 # [tool.uv.sources.qsmile]
@@ -31,15 +31,13 @@ with app.setup:
     from plotly.subplots import make_subplots
 
     from qsmile import (
+        DayCount,
         OptionChain,
         SABRModel,
         SmileMetadata,
         SVIModel,
         XCoord,
         YCoord,
-        black76_call,
-        black76_implied_vol,
-        black76_put,
         fit,
     )
 
@@ -56,98 +54,11 @@ def cell_intro():
 
         | # | Layer | Key classes / functions |
         |---|-------|------------------------|
-        | 1 | **Black-76** | `black76_call`, `black76_put`, `black76_implied_vol` |
-        | 2 | **Option chain** | `OptionChain` — auto-calibrates $F$, $D$ from put-call parity |
-        | 3 | **Denoising** | `OptionChain.filter()` — 5-filter cleaning pipeline |
-        | 4 | **SmileData** | `to_smile_data()`, coordinate transforms |
-        | 5 | **Model fitting** | `fit(sd, SVIModel)`, `fit(sd, SABRModel)` |
-        | 6 | **Ancillary** | volume / open interest passthrough, `SmileData.plot()` |
+        | 1 | **Option chain** | `OptionChain` — load, filter, calibrate $F$, $D$ |
+        | 2 | **SmileData** | `to_smile_data()`, coordinate transforms |
+        | 3 | **Model fitting** | `fit(sd, SVIModel)`, `fit(sd, SABRModel)` |
+        | 4 | **Ancillary** | volume / open interest passthrough |
         """
-    )
-    return
-
-
-@app.cell(hide_code=True)
-def cell_b76_intro():
-    """Introduce Black-76 section."""
-    mo.md(
-        r"""
-        ---
-        ## 1 · Black-76 Pricing
-
-        Black-76 prices European options on a forward:
-
-        $$
-        C = D\bigl[F\,\Phi(d_1) - K\,\Phi(d_2)\bigr],
-        \quad
-        P = D\bigl[K\,\Phi(-d_2) - F\,\Phi(-d_1)\bigr]
-        $$
-
-        where $d_{1,2} = \frac{\ln(F/K) \pm \tfrac12 \sigma^2 T}{\sigma\sqrt{T}}$.
-        """
-    )
-    return
-
-
-@app.cell(hide_code=True)
-def cell_b76_scalar():
-    """Scalar Black-76 pricing."""
-    F, K, D, sigma, T = 5500.0, 5500.0, 0.98, 0.20, 0.25
-
-    call_price = black76_call(F, K, D, sigma, T)
-    put_price = black76_put(F, K, D, sigma, T)
-
-    mo.md(
-        f"""
-    ### Scalar example
-
-    | Input | Value |
-    |-------|-------|
-    | Forward $F$ | {F:,.0f} |
-    | Strike $K$ | {K:,.0f} |
-    | Discount factor $D$ | {D} |
-    | Vol $\\sigma$ | {sigma:.0%} |
-    | Expiry $T$ | {T} yr |
-
-    | Output | Value |
-    |--------|------:|
-    | Call | {float(call_price):.4f} |
-    | Put  | {float(put_price):.4f} |
-    | Put-call parity check $C - P$ | {float(call_price - put_price):.4f} |
-    | $D(F - K)$ | {D * (F - K):.4f} |
-    """
-    )
-    return D, F, T, sigma
-
-
-@app.cell(hide_code=True)
-def cell_b76_vector(D, F, T, sigma):
-    """Vectorised pricing and implied-vol round-trip."""
-    _strikes = np.linspace(4500, 6500, 41)
-    _prices = black76_call(F, _strikes, D, sigma, T)
-
-    # Invert back to implied vol
-    _recovered = np.array(
-        [black76_implied_vol(float(p), F, float(k), D, T, is_call=True) for p, k in zip(_prices, _strikes, strict=True)]
-    )
-    _max_err = float(np.max(np.abs(_recovered - sigma)))
-
-    _fig = go.Figure()
-    _fig.add_trace(
-        go.Scatter(x=_strikes, y=_prices, mode="lines+markers", name="Call price"),
-    )
-    _fig.update_layout(
-        title="Black-76 Call Prices (vectorised)",
-        xaxis_title="Strike",
-        yaxis_title="Price",
-        template="plotly_white",
-        height=350,
-    )
-    mo.vstack(
-        [
-            mo.ui.plotly(_fig),
-            mo.md(f"**Implied-vol round-trip** — max |σ_recovered − σ_input| = `{_max_err:.2e}`"),
-        ]
     )
     return
 
@@ -158,11 +69,22 @@ def cell_chain_intro():
     mo.md(
         r"""
         ---
-        ## 2 · OptionChain — Real SPX Data
+        ## 1 · OptionChain — Real SPX Data
 
-        We load a real SPX chain from parquet. The constructor
-        **auto-calibrates forward and discount factor** via quasi-delta
-        weighted least squares on put-call parity:
+        We load a real SPX chain from parquet, then **filter first** to
+        remove arbitrageable quotes before calibrating forward and
+        discount factor.
+
+        The filtering pipeline applies five sequential checks:
+
+        1. **Zero-bid** — remove strikes where either bid is zero
+        2. **Put-call parity monotonicity** — enforce $C_\text{mid} - P_\text{mid}$ decreasing in $K$
+        3. **Call/put mid monotonicity** — calls decreasing, puts increasing
+        4. **Sub-intrinsic** — drop strikes priced below intrinsic value
+        5. **Parity residual** — trim large deviations from calibrated parity
+
+        After filtering, forward $F$ and discount factor $D$ are
+        **calibrated from put-call parity** on the clean data:
 
         $$C_{\mathrm{mid}} - P_{\mathrm{mid}} \approx D(F - K)$$
         """
@@ -177,10 +99,9 @@ def cell_load_data():
     _pq = sorted(_root.glob("parquet/chains/*.parquet"))[-1]
     df_raw = pd.read_parquet(_pq)
 
+    # Extract dates from the parquet data
     date = pd.Timestamp(df_raw["fetchDate"].iloc[0])
     expiry_date = pd.Timestamp(df_raw["expiryDate"].iloc[0])
-    expiry_days = (expiry_date - date).days
-    texpiry = expiry_days / 365.0
 
     # Pivot calls/puts onto common strikes
     _cols = ["strike", "bid", "ask", "volume", "openInterest"]
@@ -195,76 +116,141 @@ def cell_load_data():
     put_ask = merged["ask_put"].values.astype(np.float64)
     volume = (merged["volume_call"].fillna(0).values + merged["volume_put"].fillna(0).values).astype(np.float64)
     oi = (merged["openInterest_call"].fillna(0).values + merged["openInterest_put"].fillna(0).values).astype(np.float64)
-    return call_ask, call_bid, date, expiry_date, texpiry, oi, put_ask, put_bid, strikes, volume
+    return call_ask, call_bid, date, expiry_date, oi, put_ask, put_bid, strikes, volume
 
 
 @app.cell(hide_code=True)
-def cell_build_chain(
+def cell_build_and_filter(
     call_ask,
     call_bid,
     date,
     expiry_date,
-    texpiry,
     oi,
     put_ask,
     put_bid,
     strikes,
     volume,
 ):
-    """Build an OptionChain — forward / DF calibrated automatically."""
+    """Build raw OptionChain, filter, then show before/after comparison."""
+    # -- Construct SmileMetadata explicitly --
+    metadata = SmileMetadata(
+        date=date,
+        expiry=expiry_date,
+        daycount=DayCount.ACT365,
+        # forward and discount_factor will be auto-calibrated
+    )
+
+    # -- Build the raw (unfiltered) chain --
     chain_raw = OptionChain(
         strikes=strikes,
         call_bid=call_bid,
         call_ask=call_ask,
         put_bid=put_bid,
         put_ask=put_ask,
-        metadata=SmileMetadata(date=date, expiry=expiry_date),
+        metadata=metadata,
         volume=volume,
         open_interest=oi,
     )
 
-    mo.md(
-        f"""
-    ### Calibrated from put-call parity
+    # -- Filter immediately --
+    chain = chain_raw.filter()
 
-    | Quantity | Value |
-    |----------|------:|
-    | Strikes loaded | {len(strikes)} |
-    | Expiry | {texpiry:.4f} yr ({(expiry_date - date).days} days) |
-    | Forward $F$ | {chain_raw.metadata.forward:,.2f} |
-    | Discount factor $D$ | {chain_raw.metadata.discount_factor:.6f} |
-    """
+    _n_raw = len(chain_raw.strikes)
+    _n_clean = len(chain.strikes)
+    _vol_raw = "Yes" if chain_raw.volume is not None else "No"
+    _vol_cln = "Yes" if chain.volume is not None else "No"
+    _oi_raw = "Yes" if chain_raw.open_interest is not None else "No"
+    _oi_cln = "Yes" if chain.open_interest is not None else "No"
+
+    _filter_table = f"""\
+### Before & after filtering
+
+| Metric | Raw | Filtered |
+|--------|----:|---------:|
+| Strikes | {_n_raw} | {_n_clean} |
+| Removed | — | {_n_raw - _n_clean} |
+| Volume attached | {_vol_raw} | {_vol_cln} |
+| OI attached | {_oi_raw} | {_oi_cln} |
+"""
+    _meta_table = f"""\
+### Metadata
+
+| Field | Value |
+|-------|------:|
+| Date | {chain.metadata.date.strftime("%Y-%m-%d")} |
+| Expiry | {chain.metadata.expiry.strftime("%Y-%m-%d")} |
+| Day count | {chain.metadata.daycount.value} |
+| $T$ (years) | {chain.metadata.texpiry:.4f} |
+| Forward $F$ | {chain.metadata.forward:,.2f} |
+| Discount factor $D$ | {chain.metadata.discount_factor:.6f} |
+"""
+    mo.hstack(
+        [mo.md(_filter_table), mo.md(_meta_table)],
+        justify="start",
+        gap=2,
     )
-    return (chain_raw,)
+    return chain, chain_raw
 
 
 @app.cell(hide_code=True)
-def cell_chain_plot(chain_raw):
-    """Plot raw bid/ask prices with error bars."""
-    _fig = go.Figure()
-    for label, mid, bid, ask, color in [
-        ("Calls", chain_raw.call_mid, chain_raw.call_bid, chain_raw.call_ask, "#2196F3"),
-        ("Puts", chain_raw.put_mid, chain_raw.put_bid, chain_raw.put_ask, "#E74C3C"),
-    ]:
-        _fig.add_trace(
-            go.Scatter(
-                x=chain_raw.strikes,
-                y=mid,
-                mode="markers+lines",
-                error_y={
-                    "type": "data",
-                    "symmetric": False,
-                    "array": (ask - mid).tolist(),
-                    "arrayminus": (mid - bid).tolist(),
-                },
-                name=label,
-                marker={"color": color},
+def cell_chain_plot(chain, chain_raw):
+    """Plot raw vs filtered bid/ask prices."""
+    _fig = make_subplots(
+        rows=1,
+        cols=2,
+        subplot_titles=["Raw (all strikes)", "Filtered (clean)"],
+        shared_yaxes=True,
+    )
+    for _col, src, title in [(1, chain_raw, "Raw"), (2, chain, "Filtered")]:
+        for label, mid, bid, ask, color in [
+            ("Calls", src.call_mid, src.call_bid, src.call_ask, "#2196F3"),
+            ("Puts", src.put_mid, src.put_bid, src.put_ask, "#E88D7D"),
+        ]:
+            _fig.add_trace(
+                go.Scatter(
+                    x=src.strikes,
+                    y=mid,
+                    mode="markers+lines",
+                    error_y={
+                        "type": "data",
+                        "symmetric": False,
+                        "array": (ask - mid).tolist(),
+                        "arrayminus": (mid - bid).tolist(),
+                    },
+                    name=f"{label} ({title})",
+                    marker={"color": color, "size": 4},
+                    line={"color": color},
+                    showlegend=(_col == 1),
+                ),
+                row=1,
+                col=_col,
             )
-        )
+    _x_lo = min(float(chain_raw.strikes.min()), float(chain.strikes.min()))
+    _x_hi = max(float(chain_raw.strikes.max()), float(chain.strikes.max()))
+    _y_lo = min(
+        float(chain_raw.call_bid.min()),
+        float(chain_raw.put_bid.min()),
+        float(chain.call_bid.min()),
+        float(chain.put_bid.min()),
+    )
+    _y_hi = max(
+        float(chain_raw.call_ask.max()),
+        float(chain_raw.put_ask.max()),
+        float(chain.call_ask.max()),
+        float(chain.put_ask.max()),
+    )
+    _x_pad = (_x_hi - _x_lo) * 0.05
+    _y_pad = (_y_hi - _y_lo) * 0.05
+    _fig.update_xaxes(
+        title_text="Strike",
+        range=[_x_lo - _x_pad, _x_hi + _x_pad],
+    )
+    _fig.update_yaxes(
+        title_text="Price",
+        range=[_y_lo - _y_pad, _y_hi + _y_pad],
+    )
     _fig.update_layout(
-        title="Raw Bid/Ask Option Prices",
-        xaxis_title="Strike",
-        yaxis_title="Price",
+        title="Option Prices — Raw vs Filtered",
         template="plotly_white",
         height=400,
     )
@@ -273,74 +259,42 @@ def cell_chain_plot(chain_raw):
 
 
 @app.cell(hide_code=True)
-def cell_filter_intro():
-    """Introduce the denoising section."""
-    mo.md(
-        r"""
-        ---
-        ## 3 · Denoising
-
-        `OptionChain.filter()` applies five sequential filters to remove
-        arbitrageable or noisy quotes:
-
-        1. **Zero-bid** — remove strikes where either bid is zero
-        2. **Put-call parity monotonicity** — enforce $C_\text{mid} - P_\text{mid}$ decreasing in $K$
-        3. **Call/put mid monotonicity** — calls decreasing, puts increasing
-        4. **Sub-intrinsic** — drop strikes priced below intrinsic value
-        5. **Parity residual** — trim large deviations from calibrated parity
-        """
-    )
-    return
-
-
-@app.cell(hide_code=True)
-def cell_filter(chain_raw):
-    """Denoise the option chain."""
-    chain = chain_raw.filter()
-
-    mo.md(
-        f"""
-    ### Denoising result
-
-    | Metric | Value |
-    |--------|------:|
-    | Strikes before | {len(chain_raw.strikes)} |
-    | Strikes after  | {len(chain.strikes)} |
-    | Removed | {len(chain_raw.strikes) - len(chain.strikes)} |
-    | Volume preserved | {"Yes" if chain.volume is not None else "No"} |
-    | Open interest preserved | {"Yes" if chain.open_interest is not None else "No"} |
-    """
-    )
-    return (chain,)
-
-
-@app.cell(hide_code=True)
 def cell_sd_intro():
     """Introduce SmileData section."""
+    _x_table = (
+        "| X-coordinate | Formula |\n"
+        "|-------------|---------|\n"
+        "| FixedStrike | $K$ |\n"
+        "| MoneynessStrike | $K / F$ |\n"
+        r"| LogMoneynessStrike | $\ln(K/F)$ |"
+        "\n"
+        r"| StandardisedStrike | $\ln(K/F) / (\sigma_\text{ATM}\sqrt{T})$ |"
+    )
+    _y_table = (
+        "| Y-coordinate | Formula |\n"
+        "|-------------|---------|\n"
+        "| Price | option price |\n"
+        r"| Volatility | $\sigma$ |"
+        "\n"
+        r"| Variance | $\sigma^2$ |"
+        "\n"
+        r"| TotalVariance | $\sigma^2 T$ |"
+    )
     mo.md(
         r"""
         ---
-        ## 4 · SmileData & Coordinate Transforms
+        ## 2 · SmileData & Coordinate Transforms
 
         `.to_smile_data()` delta-blends call/put implied vols into
         **(FixedStrike, Volatility)** using Black-76 call-delta weights.
 
         From there, `.transform(x, y)` moves freely between any combination:
-
-        | X-coordinate | Formula |
-        |-------------|---------|
-        | FixedStrike | $K$ |
-        | MoneynessStrike | $K / F$ |
-        | LogMoneynessStrike | $\ln(K/F)$ |
-        | StandardisedStrike | $\ln(K/F) / (\sigma_\text{ATM}\sqrt{T})$ |
-
-        | Y-coordinate | Formula |
-        |-------------|---------|
-        | Price | option price |
-        | Volatility | $\sigma$ |
-        | Variance | $\sigma^2$ |
-        | TotalVariance | $\sigma^2 T$ |
         """
+    )
+    mo.hstack(
+        [mo.md(_x_table), mo.md(_y_table)],
+        justify="start",
+        gap=2,
     )
     return
 
@@ -391,11 +345,11 @@ def cell_transform_grid(sd_vols):
     ]
 
     _fig = make_subplots(rows=2, cols=2, subplot_titles=[v[0] for v in views])
-    colors = ["#2196F3", "#E74C3C", "#2FA4A9", "#9B59B6"]
+    colors = ["#2196F3", "#E88D7D", "#2FA4A9", "#9B59B6"]
 
     for idx, (_title, xc, yc, xlabel, ylabel) in enumerate(views):
         v = sd_vols.transform(xc, yc)
-        row, col = divmod(idx, 2)
+        _row, _col = divmod(idx, 2)
         _fig.add_trace(
             go.Scatter(
                 x=v.x,
@@ -405,11 +359,11 @@ def cell_transform_grid(sd_vols):
                 line={"color": colors[idx]},
                 showlegend=False,
             ),
-            row=row + 1,
-            col=col + 1,
+            row=_row + 1,
+            col=_col + 1,
         )
-        _fig.update_xaxes(title_text=xlabel, row=row + 1, col=col + 1)
-        _fig.update_yaxes(title_text=ylabel, row=row + 1, col=col + 1)
+        _fig.update_xaxes(title_text=xlabel, row=_row + 1, col=_col + 1)
+        _fig.update_yaxes(title_text=ylabel, row=_row + 1, col=_col + 1)
 
     _fig.update_layout(
         title="Same Smile — Four Coordinate Systems",
@@ -451,7 +405,7 @@ def cell_svi_intro():
     mo.md(
         r"""
         ---
-        ## 5 · SVI Model Fit
+        ## 3 · SVI Model Fit
 
         Stochastic Volatility Inspired parametrisation (Gatheral, 2004):
 
@@ -473,20 +427,29 @@ def cell_svi_fit(sd_vols):
     svi_result = fit(sd_vols, SVIModel)
     p = svi_result.params
 
-    mo.md(
-        f"""
-    ### Fitted SVI parameters
+    _params_table = f"""
+### SVI Parameters
 
-    | Parameter | Value | Meaning |
-    |-----------|------:|---------|
-    | $a$ | {p.a:.6f} | Vertical shift |
-    | $b$ | {p.b:.6f} | Wing slope |
-    | $\\rho$ | {p.rho:.6f} | Skew |
-    | $m$ | {p.m:.6f} | Horizontal shift |
-    | $\\sigma$ | {p.sigma:.6f} | ATM curvature |
-    | **RMSE** | {svi_result.rmse:.2e} | |
-    | **Converged** | {"Yes" if svi_result.success else "No"} | |
-    """
+| Parameter | Value | Meaning |
+|-----------|------:|--------|
+| $a$ | {p.a:.6f} | Vertical shift |
+| $b$ | {p.b:.6f} | Wing slope |
+| $\\rho$ | {p.rho:.6f} | Skew |
+| $m$ | {p.m:.6f} | Horizontal shift |
+| $\\sigma$ | {p.sigma:.6f} | ATM curvature |
+"""
+    _diag_table = f"""
+### Fit Diagnostics
+
+| Metric | Value |
+|--------|------:|
+| **RMSE** | {svi_result.rmse:.2e} |
+| **Converged** | {"Yes" if svi_result.success else "No"} |
+"""
+    mo.hstack(
+        [mo.md(_params_table), mo.md(_diag_table)],
+        justify="start",
+        gap=2,
     )
     return (svi_result,)
 
@@ -512,7 +475,7 @@ def cell_svi_plot(sd_vols, svi_result):
                 "array": ((sd_vols.y_ask - sd_vols.y_mid) * 100).tolist(),
                 "arrayminus": ((sd_vols.y_mid - sd_vols.y_bid) * 100).tolist(),
             },
-            marker={"size": 8, "color": "#E74C3C"},
+            marker={"size": 8, "color": "#E88D7D"},
             name="Market (bid/ask)",
         )
     )
@@ -542,7 +505,7 @@ def cell_sabr_intro():
     mo.md(
         r"""
         ---
-        ## 6 · SABR Model Fit
+        ## 4 · SABR Model Fit
 
         Hagan (2002) SABR lognormal implied volatility approximation.
         The SABR model describes the joint dynamics of a forward $F$
@@ -572,21 +535,89 @@ def cell_sabr_fit(sd_vols):
     sabr_result = fit(sd_vols, SABRModel)
     sp = sabr_result.params
 
-    mo.md(
-        f"""
-    ### Fitted SABR parameters
+    _params_table = f"""
+### SABR Parameters
 
-    | Parameter | Value | Meaning |
-    |-----------|------:|---------|
-    | $\\alpha$ | {sp.alpha:.6f} | Initial vol |
-    | $\\beta$ | {sp.beta:.6f} | CEV exponent |
-    | $\\rho$ | {sp.rho:.6f} | Correlation |
-    | $\\nu$ | {sp.nu:.6f} | Vol-of-vol |
-    | **RMSE** | {sabr_result.rmse:.2e} | |
-    | **Converged** | {"Yes" if sabr_result.success else "No"} | |
-    """
+| Parameter | Value | Meaning |
+|-----------|------:|--------|
+| $\\alpha$ | {sp.alpha:.6f} | Initial vol |
+| $\\beta$ | {sp.beta:.6f} | CEV exponent |
+| $\\rho$ | {sp.rho:.6f} | Correlation |
+| $\\nu$ | {sp.nu:.6f} | Vol-of-vol |
+"""
+    _diag_table = f"""
+### Fit Diagnostics
+
+| Metric | Value |
+|--------|------:|
+| **RMSE** | {sabr_result.rmse:.2e} |
+| **Converged** | {"Yes" if sabr_result.success else "No"} |
+"""
+    mo.hstack(
+        [mo.md(_params_table), mo.md(_diag_table)],
+        justify="start",
+        gap=2,
     )
     return (sabr_result,)
+
+
+@app.cell(hide_code=True)
+def cell_sabr_plot(sd_vols, sabr_result):
+    """Overlay SABR fit on market vols."""
+    _fwd = sd_vols.metadata.forward
+    _k_fine = np.linspace(sd_vols.x.min() * 0.95, sd_vols.x.max() * 1.05, 300)
+    _log_k = np.log(_k_fine / _fwd)
+    _iv_sabr = sabr_result.params.evaluate(_log_k)
+
+    _fig = go.Figure()
+    _fig.add_trace(
+        go.Scatter(
+            x=sd_vols.x,
+            y=sd_vols.y_mid * 100,
+            mode="markers",
+            error_y={
+                "type": "data",
+                "symmetric": False,
+                "array": ((sd_vols.y_ask - sd_vols.y_mid) * 100).tolist(),
+                "arrayminus": ((sd_vols.y_mid - sd_vols.y_bid) * 100).tolist(),
+            },
+            marker={"size": 8, "color": "#E88D7D"},
+            name="Market (bid/ask)",
+        )
+    )
+    _fig.add_trace(
+        go.Scatter(
+            x=_k_fine,
+            y=_iv_sabr * 100,
+            mode="lines",
+            line={"color": "#7E57C2", "width": 2.5},
+            name="SABR fit",
+        )
+    )
+    _fig.update_layout(
+        title="SABR Fit vs Market Implied Vols",
+        xaxis_title="Strike",
+        yaxis_title="Implied Volatility (%)",
+        template="plotly_white",
+        height=400,
+    )
+    mo.ui.plotly(_fig)
+    return
+
+
+@app.cell(hide_code=True)
+def cell_comparison_intro():
+    """Introduce model comparison section."""
+    mo.md(
+        r"""
+        ---
+        ## 5 · Model Comparison
+
+        Both SVI and SABR fits overlaid on the same market data for
+        direct visual comparison.
+        """
+    )
+    return
 
 
 @app.cell(hide_code=True)
@@ -612,8 +643,8 @@ def cell_model_comparison(sabr_result, sd_vols, svi_result):
                 "array": ((sd_vols.y_ask - sd_vols.y_mid) * 100).tolist(),
                 "arrayminus": ((sd_vols.y_mid - sd_vols.y_bid) * 100).tolist(),
             },
-            marker={"size": 8, "color": "#999"},
-            name="Market",
+            marker={"size": 8, "color": "#E88D7D"},
+            name="Market (bid/ask)",
         )
     )
     _fig.add_trace(
@@ -630,7 +661,7 @@ def cell_model_comparison(sabr_result, sd_vols, svi_result):
             x=_k_fine,
             y=_iv_sabr * 100,
             mode="lines",
-            line={"color": "#FF9800", "width": 2.5, "dash": "dot"},
+            line={"color": "#7E57C2", "width": 2.5},
             name=f"SABR (RMSE {sabr_result.rmse:.2e})",
         )
     )
@@ -640,7 +671,13 @@ def cell_model_comparison(sabr_result, sd_vols, svi_result):
         yaxis_title="Implied Volatility (%)",
         template="plotly_white",
         height=420,
-        legend={"x": 0.02, "y": 0.98},
+        legend={
+            "orientation": "h",
+            "yanchor": "top",
+            "y": -0.15,
+            "xanchor": "center",
+            "x": 0.5,
+        },
     )
     mo.ui.plotly(_fig)
     return
@@ -652,7 +689,7 @@ def cell_vol_oi_intro():
     mo.md(
         r"""
         ---
-        ## 7 · Volume & Open Interest Passthrough
+        ## 6 · Volume & Open Interest Passthrough
 
         Optional `volume` and `open_interest` arrays flow through the
         entire pipeline — from `OptionChain` through `filter()`,
@@ -727,29 +764,6 @@ def cell_vol_oi_demo(chain):
 
 
 @app.cell(hide_code=True)
-def cell_plot_intro():
-    """Introduce the built-in plot method."""
-    mo.md(
-        r"""
-        ---
-        ## 8 · Built-in `SmileData.plot()`
-
-        `SmileData` includes a matplotlib-based `.plot()` method that
-        auto-labels axes from the current coordinate system.
-        """
-    )
-    return
-
-
-@app.cell(hide_code=True)
-def cell_matplotlib_plot(sd_vols):
-    """Use the built-in SmileData.plot() method."""
-    fig = sd_vols.plot(title="Market Smile (matplotlib)")
-    fig
-    return
-
-
-@app.cell(hide_code=True)
 def cell_summary():
     """Conclude the notebook."""
     mo.md(
@@ -759,14 +773,13 @@ def cell_summary():
 
         | Step | API | What it does |
         |------|-----|-------------|
-        | Pricing | `black76_call / put / implied_vol` | European option pricing & inversion |
-        | Load | `OptionChain(...)` | Stores bid/ask + auto-calibrates $F$, $D$ |
+        | Load | `OptionChain(...)` | Stores bid/ask prices |
         | Clean | `.filter()` | 5-filter arbitrage removal |
+        | Calibrate | automatic | Forward $F$ and discount factor $D$ from put-call parity |
         | Convert | `.to_smile_data()` | Delta-blended implied vols |
         | Transform | `.transform(x, y)` | Any $(X, Y)$ coordinate pair |
         | Fit | `fit(sd, SVIModel)` / `fit(sd, SABRModel)` | Parametric smile fit |
         | Ancillary | `volume`, `open_interest` | Optional data carried through pipeline |
-        | Visualise | `.plot()` | Built-in matplotlib rendering |
         """
     )
     return
