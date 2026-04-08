@@ -6,14 +6,12 @@ from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING
 
 import numpy as np
-import pandas as pd
 from numpy.typing import NDArray
 
 if TYPE_CHECKING:
     import matplotlib.figure
 
 from qsmile.core.coords import XCoord, YCoord
-from qsmile.core.daycount import DayCount
 from qsmile.core.maps import (
     apply_x_chain,
     apply_y_chain,
@@ -150,11 +148,7 @@ class SmileData:
         cls,
         strikes: NDArray[np.float64],
         ivs: NDArray[np.float64],
-        forward: float,
-        date: pd.Timestamp,
-        expiry: pd.Timestamp,
-        discount_factor: float = 1.0,
-        daycount: DayCount = DayCount.ACT365,
+        metadata: SmileMetadata,
     ) -> SmileData:
         """Create from mid implied vols (setting y_bid = y_ask = ivs).
 
@@ -164,35 +158,28 @@ class SmileData:
             Strike prices.
         ivs : NDArray[np.float64]
             Mid implied volatilities.
-        forward : float
-            Forward price.
-        date : pd.Timestamp
-            Valuation date.
-        expiry : pd.Timestamp
-            Expiry date.
-        discount_factor : float
-            Discount factor, defaults to 1.0.
-        daycount : DayCount
-            Day-count convention, defaults to ACT365.
+        metadata : SmileMetadata
+            Smile metadata. ``metadata.forward`` must not be ``None``.
+            ``sigma_atm`` is always recomputed from the data.
         """
         strikes = np.asarray(strikes, dtype=np.float64)
         ivs = np.asarray(ivs, dtype=np.float64)
-        atm_idx = int(np.argmin(np.abs(strikes - forward)))
+
+        if metadata.forward is None:
+            msg = "metadata.forward must not be None"
+            raise TypeError(msg)
+
+        atm_idx = int(np.argmin(np.abs(strikes - metadata.forward)))
         sigma_atm = float(ivs[atm_idx])
+        meta = replace(metadata, sigma_atm=sigma_atm)
+
         return cls(
             x=strikes,
             y_bid=ivs,
             y_ask=ivs.copy(),
             x_coord=XCoord.FixedStrike,
             y_coord=YCoord.Volatility,
-            metadata=SmileMetadata(
-                date=date,
-                expiry=expiry,
-                daycount=daycount,
-                forward=forward,
-                discount_factor=discount_factor,
-                sigma_atm=sigma_atm,
-            ),
+            metadata=meta,
         )
 
     def plot(self, *, title: str = "Smile Data") -> matplotlib.figure.Figure:

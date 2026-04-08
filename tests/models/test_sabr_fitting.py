@@ -5,6 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from qsmile.data.meta import SmileMetadata
 from qsmile.data.vols import SmileData
 from qsmile.models.fitting import SmileResult, fit
 from qsmile.models.sabr import SABRModel
@@ -28,7 +29,8 @@ def _make_synthetic_sabr_sd(
     ivs = params.evaluate(k)
     # Ensure ivs is an array
     ivs = np.asarray(ivs, dtype=np.float64)
-    return SmileData.from_mid_vols(strikes=strikes, ivs=ivs, forward=params.forward, date=_DATE, expiry=_EXPIRY)
+    meta = SmileMetadata(date=_DATE, expiry=_EXPIRY, forward=params.forward)
+    return SmileData.from_mid_vols(strikes=strikes, ivs=ivs, metadata=meta)
 
 
 class TestFitSABRSyntheticRoundTrip:
@@ -69,12 +71,11 @@ class TestFitSABRNoisyData:
         noisy_ivs = np.asarray(_TRUE_PARAMS.evaluate(np.log(sd.x / _TRUE_PARAMS.forward))) + rng.normal(
             0, 0.002, size=sd.x.shape
         )
+        meta = SmileMetadata(date=_DATE, expiry=_EXPIRY, forward=_TRUE_PARAMS.forward)
         sd_noisy = SmileData.from_mid_vols(
             strikes=sd.x,
             ivs=noisy_ivs,
-            forward=_TRUE_PARAMS.forward,
-            date=pd.Timestamp("2024-01-01"),
-            expiry=pd.Timestamp("2025-01-01"),
+            metadata=meta,
         )
         result = fit(sd_noisy, SABRModel)
 

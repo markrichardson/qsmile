@@ -97,14 +97,18 @@ print(result.rmse)     # Root mean square error
 ```python +RHIZA_SKIP
 import numpy as np
 import pandas as pd
-from qsmile import SmileData, SVIModel, fit
+from qsmile import SmileData, SmileMetadata, SVIModel, fit
+
+meta = SmileMetadata(
+    date=pd.Timestamp("2024-01-01"),
+    expiry=pd.Timestamp("2024-07-01"),
+    forward=100.0,
+)
 
 sd = SmileData.from_mid_vols(
     strikes=np.array([80, 90, 100, 110, 120], dtype=float),
     ivs=np.array([0.28, 0.22, 0.18, 0.17, 0.19]),
-    forward=100.0,
-    date=pd.Timestamp("2024-01-01"),
-    expiry=pd.Timestamp("2024-07-01"),
+    metadata=meta,
 )
 
 result = fit(sd, model=SVIModel)

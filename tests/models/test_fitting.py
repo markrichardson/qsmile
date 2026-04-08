@@ -5,6 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from qsmile.data.meta import SmileMetadata
 from qsmile.data.vols import SmileData
 from qsmile.models.fitting import SmileResult, fit
 from qsmile.models.svi import SVIModel
@@ -21,13 +22,16 @@ def _make_synthetic_sd(
     strike_hi: float = 120.0,
 ) -> SmileData:
     """Generate SmileData from known SVI parameters (noiseless)."""
-    date = pd.Timestamp("2024-01-01")
-    expiry = pd.Timestamp("2024-07-01")
-    texpiry = (expiry - date).days / 365.0
+    meta = SmileMetadata(
+        date=pd.Timestamp("2024-01-01"),
+        expiry=pd.Timestamp("2024-07-01"),
+        forward=forward,
+    )
+    texpiry = meta.texpiry
     strikes = np.linspace(strike_lo, strike_hi, n_strikes)
     k = np.log(strikes / forward)
     ivs = params.implied_vol(k, texpiry)
-    return SmileData.from_mid_vols(strikes=strikes, ivs=ivs, forward=forward, date=date, expiry=expiry)
+    return SmileData.from_mid_vols(strikes=strikes, ivs=ivs, metadata=meta)
 
 
 class TestFitSyntheticRoundTrip:
@@ -71,12 +75,11 @@ class TestFitNoisyData:
         noise = rng.normal(0, 0.002, size=ivs_clean.shape)
         ivs_noisy = ivs_clean + noise
 
+        meta = SmileMetadata(date=date, expiry=expiry_ts, forward=forward)
         sd = SmileData.from_mid_vols(
             strikes=strikes,
             ivs=ivs_noisy,
-            forward=forward,
-            date=date,
-            expiry=expiry_ts,
+            metadata=meta,
         )
         result = fit(sd, SVIModel)
 

@@ -89,9 +89,12 @@ class TestFromMidVolsConstruction:
     def test_from_arrays(self):
         strikes = np.array([90.0, 100.0, 110.0])
         ivs = np.array([0.25, 0.20, 0.22])
-        sd = SmileData.from_mid_vols(
-            strikes=strikes, ivs=ivs, forward=100.0, date=pd.Timestamp("2024-01-01"), expiry=pd.Timestamp("2024-07-01")
+        meta = SmileMetadata(
+            date=pd.Timestamp("2024-01-01"),
+            expiry=pd.Timestamp("2024-07-01"),
+            forward=100.0,
         )
+        sd = SmileData.from_mid_vols(strikes=strikes, ivs=ivs, metadata=meta)
         np.testing.assert_array_equal(sd.x, strikes)
         np.testing.assert_array_equal(sd.y_bid, ivs)
         np.testing.assert_array_equal(sd.y_ask, ivs)
@@ -99,72 +102,163 @@ class TestFromMidVolsConstruction:
         assert sd.y_coord == YCoord.Volatility
         assert sd.metadata.forward == 100.0
         assert sd.metadata.expiry == pd.Timestamp("2024-07-01")
-        assert sd.metadata.discount_factor == 1.0
+        assert sd.metadata.discount_factor is None
 
     def test_from_lists(self):
+        meta = SmileMetadata(
+            date=pd.Timestamp("2024-01-01"),
+            expiry=pd.Timestamp("2024-07-01"),
+            forward=100.0,
+        )
         sd = SmileData.from_mid_vols(
             strikes=[90, 100, 110],
             ivs=[0.25, 0.20, 0.22],
-            forward=100.0,
-            date=pd.Timestamp("2024-01-01"),
-            expiry=pd.Timestamp("2024-07-01"),
+            metadata=meta,
         )
         assert isinstance(sd.x, np.ndarray)
         assert isinstance(sd.y_bid, np.ndarray)
         assert sd.x.dtype == np.float64
 
     def test_custom_discount_factor(self):
+        meta = SmileMetadata(
+            date=pd.Timestamp("2024-01-01"),
+            expiry=pd.Timestamp("2024-07-01"),
+            forward=100.0,
+            discount_factor=0.99,
+        )
         sd = SmileData.from_mid_vols(
             strikes=[90, 100, 110],
             ivs=[0.25, 0.20, 0.22],
-            forward=100.0,
-            date=pd.Timestamp("2024-01-01"),
-            expiry=pd.Timestamp("2024-07-01"),
-            discount_factor=0.99,
+            metadata=meta,
         )
         assert sd.metadata.discount_factor == 0.99
 
     def test_sigma_atm_derived(self):
+        meta = SmileMetadata(
+            date=pd.Timestamp("2024-01-01"),
+            expiry=pd.Timestamp("2024-07-01"),
+            forward=100.0,
+        )
         sd = SmileData.from_mid_vols(
             strikes=np.array([90.0, 100.0, 110.0]),
             ivs=np.array([0.25, 0.20, 0.22]),
-            forward=100.0,
-            date=pd.Timestamp("2024-01-01"),
-            expiry=pd.Timestamp("2024-07-01"),
+            metadata=meta,
         )
         # ATM strike is 100.0, vol at 100 is 0.20
         assert sd.metadata.sigma_atm == pytest.approx(0.20)
 
 
+class TestFromMidVolsMetadataOverload:
+    """Tests for the SmileMetadata-based overload of from_mid_vols."""
+
+    def test_construct_from_metadata(self):
+        meta = SmileMetadata(
+            date=pd.Timestamp("2024-01-01"),
+            expiry=pd.Timestamp("2024-07-01"),
+            forward=100.0,
+            discount_factor=0.99,
+        )
+        strikes = np.array([90.0, 100.0, 110.0])
+        ivs = np.array([0.25, 0.20, 0.22])
+        sd = SmileData.from_mid_vols(strikes=strikes, ivs=ivs, metadata=meta)
+
+        assert sd.metadata.forward == 100.0
+        assert sd.metadata.discount_factor == 0.99
+        assert sd.metadata.date == pd.Timestamp("2024-01-01")
+        assert sd.metadata.expiry == pd.Timestamp("2024-07-01")
+        np.testing.assert_array_equal(sd.x, strikes)
+        np.testing.assert_array_equal(sd.y_bid, ivs)
+        assert sd.x_coord == XCoord.FixedStrike
+        assert sd.y_coord == YCoord.Volatility
+
+    def test_sigma_atm_recomputed(self):
+        meta = SmileMetadata(
+            date=pd.Timestamp("2024-01-01"),
+            expiry=pd.Timestamp("2024-07-01"),
+            forward=100.0,
+            discount_factor=1.0,
+            sigma_atm=0.50,
+        )
+        ivs = np.array([0.25, 0.20, 0.22])
+        sd = SmileData.from_mid_vols(strikes=np.array([90.0, 100.0, 110.0]), ivs=ivs, metadata=meta)
+        # sigma_atm should be recomputed as 0.20 (ATM), not 0.50
+        assert sd.metadata.sigma_atm == pytest.approx(0.20)
+
+    def test_forward_none_raises(self):
+        meta = SmileMetadata(
+            date=pd.Timestamp("2024-01-01"),
+            expiry=pd.Timestamp("2024-07-01"),
+            forward=None,
+        )
+        with pytest.raises(TypeError, match="forward"):
+            SmileData.from_mid_vols(
+                strikes=np.array([90.0, 100.0, 110.0]),
+                ivs=np.array([0.25, 0.20, 0.22]),
+                metadata=meta,
+            )
+
+    def test_metadata_takes_precedence(self):
+        meta = SmileMetadata(
+            date=pd.Timestamp("2025-06-01"),
+            expiry=pd.Timestamp("2025-12-01"),
+            forward=200.0,
+            discount_factor=0.95,
+        )
+        sd = SmileData.from_mid_vols(
+            strikes=np.array([190.0, 200.0, 210.0]),
+            ivs=np.array([0.25, 0.20, 0.22]),
+            metadata=meta,
+        )
+        assert sd.metadata.forward == 200.0
+        assert sd.metadata.date == pd.Timestamp("2025-06-01")
+        assert sd.metadata.discount_factor == 0.95
+
+    def test_missing_metadata_raises(self):
+        with pytest.raises(TypeError):
+            SmileData.from_mid_vols(
+                strikes=np.array([90.0, 100.0, 110.0]),
+                ivs=np.array([0.25, 0.20, 0.22]),
+            )
+
+
 class TestFromMidVolsValidation:
     def test_negative_iv(self):
+        meta = SmileMetadata(
+            date=pd.Timestamp("2024-01-01"),
+            expiry=pd.Timestamp("2024-07-01"),
+            forward=100.0,
+        )
         with pytest.raises(ValueError, match=r"positive|non-negative"):
             SmileData.from_mid_vols(
                 strikes=[90, 100, 110],
                 ivs=[0.25, -0.01, 0.22],
-                forward=100.0,
-                date=pd.Timestamp("2024-01-01"),
-                expiry=pd.Timestamp("2024-07-01"),
+                metadata=meta,
             )
 
     def test_non_positive_strike(self):
+        meta = SmileMetadata(
+            date=pd.Timestamp("2024-01-01"),
+            expiry=pd.Timestamp("2024-07-01"),
+            forward=100.0,
+        )
         with pytest.raises(ValueError, match="positive"):
             SmileData.from_mid_vols(
                 strikes=[0, 100, 110],
                 ivs=[0.25, 0.20, 0.22],
-                forward=100.0,
-                date=pd.Timestamp("2024-01-01"),
-                expiry=pd.Timestamp("2024-07-01"),
+                metadata=meta,
             )
 
     def test_fewer_than_three_points(self):
+        meta = SmileMetadata(
+            date=pd.Timestamp("2024-01-01"),
+            expiry=pd.Timestamp("2024-07-01"),
+            forward=100.0,
+        )
         with pytest.raises(ValueError, match="at least 3"):
             SmileData.from_mid_vols(
                 strikes=[100, 110],
                 ivs=[0.20, 0.22],
-                forward=100.0,
-                date=pd.Timestamp("2024-01-01"),
-                expiry=pd.Timestamp("2024-07-01"),
+                metadata=meta,
             )
 
 
