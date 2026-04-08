@@ -1,4 +1,4 @@
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: SmileData provides from_mid_vols factory
 The system SHALL provide a `SmileData.from_mid_vols(strikes, ivs, forward, date, expiry, discount_factor=1.0, daycount=DayCount.ACT365, metadata=None)` classmethod that returns a `SmileData` with `x_coord=XCoord.FixedStrike`, `y_coord=YCoord.Volatility`, `y_bid = y_ask = ivs` (zero spread), and metadata populated with `forward`, `discount_factor`, `date`, `expiry`, `daycount`, and `sigma_atm` derived from the ATM strike. When `metadata` is provided, it SHALL be used instead of the individual scalar parameters.
