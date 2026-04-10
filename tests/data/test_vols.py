@@ -8,7 +8,28 @@ import pytest
 
 from qsmile.core.coords import XCoord, YCoord
 from qsmile.data.meta import SmileMetadata
+from qsmile.data.strikes import StrikeArray
 from qsmile.data.vols import SmileData
+
+
+def _make_sa(
+    strikes: np.ndarray,
+    y_bid: np.ndarray,
+    y_ask: np.ndarray,
+    *,
+    volume: np.ndarray | None = None,
+    open_interest: np.ndarray | None = None,
+) -> StrikeArray:
+    """Build a StrikeArray from parallel arrays."""
+    sa = StrikeArray()
+    idx = pd.Index(np.asarray(strikes, dtype=np.float64), dtype=np.float64)
+    sa.set(("y", "bid"), pd.Series(np.asarray(y_bid, dtype=np.float64), index=idx))
+    sa.set(("y", "ask"), pd.Series(np.asarray(y_ask, dtype=np.float64), index=idx))
+    if volume is not None:
+        sa.set(("meta", "volume"), pd.Series(np.asarray(volume, dtype=np.float64), index=idx))
+    if open_interest is not None:
+        sa.set(("meta", "open_interest"), pd.Series(np.asarray(open_interest, dtype=np.float64), index=idx))
+    return sa
 
 
 def _make_vol_smile_data(
@@ -22,9 +43,7 @@ def _make_vol_smile_data(
     atm_idx = int(np.argmin(np.abs(strikes - forward)))
     sigma_atm = float(vol_mid[atm_idx])
     return SmileData(
-        x=strikes,
-        y_bid=vol_mid - spread,
-        y_ask=vol_mid + spread,
+        strikearray=_make_sa(strikes, vol_mid - spread, vol_mid + spread),
         x_coord=XCoord.FixedStrike,
         y_coord=YCoord.Volatility,
         metadata=SmileMetadata(
@@ -271,9 +290,7 @@ class TestSmileDataValidation:
     def test_fewer_than_three_points(self):
         with pytest.raises(ValueError, match="at least 3"):
             SmileData(
-                x=np.array([90.0, 100.0]),
-                y_bid=np.array([0.19, 0.18]),
-                y_ask=np.array([0.21, 0.20]),
+                strikearray=_make_sa(np.array([90.0, 100.0]), np.array([0.19, 0.18]), np.array([0.21, 0.20])),
                 x_coord=XCoord.FixedStrike,
                 y_coord=YCoord.Volatility,
                 metadata=self._meta(),
@@ -281,9 +298,9 @@ class TestSmileDataValidation:
 
     def test_exactly_three_points_accepted(self):
         sd = SmileData(
-            x=np.array([90.0, 100.0, 110.0]),
-            y_bid=np.array([0.19, 0.18, 0.20]),
-            y_ask=np.array([0.21, 0.20, 0.22]),
+            strikearray=_make_sa(
+                np.array([90.0, 100.0, 110.0]), np.array([0.19, 0.18, 0.20]), np.array([0.21, 0.20, 0.22])
+            ),
             x_coord=XCoord.FixedStrike,
             y_coord=YCoord.Volatility,
             metadata=self._meta(),
@@ -293,9 +310,9 @@ class TestSmileDataValidation:
     def test_bid_exceeds_ask(self):
         with pytest.raises(ValueError, match="must not exceed"):
             SmileData(
-                x=np.array([90.0, 100.0, 110.0]),
-                y_bid=np.array([0.25, 0.20, 0.22]),
-                y_ask=np.array([0.21, 0.20, 0.22]),
+                strikearray=_make_sa(
+                    np.array([90.0, 100.0, 110.0]), np.array([0.25, 0.20, 0.22]), np.array([0.21, 0.20, 0.22])
+                ),
                 x_coord=XCoord.FixedStrike,
                 y_coord=YCoord.Volatility,
                 metadata=self._meta(),
@@ -304,9 +321,9 @@ class TestSmileDataValidation:
     def test_non_positive_fixed_strike(self):
         with pytest.raises(ValueError, match="positive"):
             SmileData(
-                x=np.array([0.0, 100.0, 110.0]),
-                y_bid=np.array([0.19, 0.18, 0.20]),
-                y_ask=np.array([0.21, 0.20, 0.22]),
+                strikearray=_make_sa(
+                    np.array([0.0, 100.0, 110.0]), np.array([0.19, 0.18, 0.20]), np.array([0.21, 0.20, 0.22])
+                ),
                 x_coord=XCoord.FixedStrike,
                 y_coord=YCoord.Volatility,
                 metadata=self._meta(),
@@ -315,9 +332,9 @@ class TestSmileDataValidation:
     def test_non_positive_moneyness_strike(self):
         with pytest.raises(ValueError, match="positive"):
             SmileData(
-                x=np.array([0.0, 1.0, 1.1]),
-                y_bid=np.array([0.19, 0.18, 0.20]),
-                y_ask=np.array([0.21, 0.20, 0.22]),
+                strikearray=_make_sa(
+                    np.array([0.0, 1.0, 1.1]), np.array([0.19, 0.18, 0.20]), np.array([0.21, 0.20, 0.22])
+                ),
                 x_coord=XCoord.MoneynessStrike,
                 y_coord=YCoord.Volatility,
                 metadata=self._meta(),
@@ -326,9 +343,9 @@ class TestSmileDataValidation:
     def test_negative_volatility(self):
         with pytest.raises(ValueError, match="non-negative"):
             SmileData(
-                x=np.array([90.0, 100.0, 110.0]),
-                y_bid=np.array([-0.01, 0.18, 0.20]),
-                y_ask=np.array([0.21, 0.20, 0.22]),
+                strikearray=_make_sa(
+                    np.array([90.0, 100.0, 110.0]), np.array([-0.01, 0.18, 0.20]), np.array([0.21, 0.20, 0.22])
+                ),
                 x_coord=XCoord.FixedStrike,
                 y_coord=YCoord.Volatility,
                 metadata=self._meta(),
@@ -337,9 +354,9 @@ class TestSmileDataValidation:
     def test_negative_variance(self):
         with pytest.raises(ValueError, match="non-negative"):
             SmileData(
-                x=np.array([-0.1, 0.0, 0.1]),
-                y_bid=np.array([-0.01, 0.02, 0.02]),
-                y_ask=np.array([0.02, 0.02, 0.02]),
+                strikearray=_make_sa(
+                    np.array([-0.1, 0.0, 0.1]), np.array([-0.01, 0.02, 0.02]), np.array([0.02, 0.02, 0.02])
+                ),
                 x_coord=XCoord.LogMoneynessStrike,
                 y_coord=YCoord.Variance,
                 metadata=self._meta(),
@@ -348,9 +365,9 @@ class TestSmileDataValidation:
     def test_negative_total_variance(self):
         with pytest.raises(ValueError, match="non-negative"):
             SmileData(
-                x=np.array([-1.0, 0.0, 1.0]),
-                y_bid=np.array([-0.01, 0.02, 0.02]),
-                y_ask=np.array([0.02, 0.03, 0.03]),
+                strikearray=_make_sa(
+                    np.array([-1.0, 0.0, 1.0]), np.array([-0.01, 0.02, 0.02]), np.array([0.02, 0.03, 0.03])
+                ),
                 x_coord=XCoord.StandardisedStrike,
                 y_coord=YCoord.TotalVariance,
                 metadata=SmileMetadata(
@@ -365,9 +382,9 @@ class TestSmileDataValidation:
     def test_log_moneyness_allows_negative_x(self):
         """LogMoneynessStrike can have negative x values (OTM puts)."""
         sd = SmileData(
-            x=np.array([-0.1, 0.0, 0.1]),
-            y_bid=np.array([0.19, 0.18, 0.20]),
-            y_ask=np.array([0.21, 0.20, 0.22]),
+            strikearray=_make_sa(
+                np.array([-0.1, 0.0, 0.1]), np.array([0.19, 0.18, 0.20]), np.array([0.21, 0.20, 0.22])
+            ),
             x_coord=XCoord.LogMoneynessStrike,
             y_coord=YCoord.Volatility,
             metadata=self._meta(),
@@ -377,9 +394,9 @@ class TestSmileDataValidation:
     def test_price_allows_negative_y(self):
         """Price Y-coord does not enforce non-negativity (deep OTM edge cases)."""
         sd = SmileData(
-            x=np.array([90.0, 100.0, 110.0]),
-            y_bid=np.array([-0.01, 4.0, 0.5]),
-            y_ask=np.array([0.01, 4.5, 0.8]),
+            strikearray=_make_sa(
+                np.array([90.0, 100.0, 110.0]), np.array([-0.01, 4.0, 0.5]), np.array([0.01, 4.5, 0.8])
+            ),
             x_coord=XCoord.FixedStrike,
             y_coord=YCoord.Price,
             metadata=self._meta(),
@@ -393,9 +410,7 @@ class TestSmileDataValidation:
 class TestSmileDataConstruction:
     def test_valid_construction(self) -> None:
         sd = SmileData(
-            x=STRIKES,
-            y_bid=VOLS_BID,
-            y_ask=VOLS_ASK,
+            strikearray=_make_sa(STRIKES, VOLS_BID, VOLS_ASK),
             x_coord=XCoord.FixedStrike,
             y_coord=YCoord.Volatility,
             metadata=META,
@@ -404,22 +419,9 @@ class TestSmileDataConstruction:
         assert sd.y_coord == YCoord.Volatility
         assert len(sd.x) == 5
 
-    def test_mismatched_lengths(self) -> None:
-        with pytest.raises(ValueError, match="same length"):
-            SmileData(
-                x=STRIKES,
-                y_bid=VOLS_BID[:3],
-                y_ask=VOLS_ASK,
-                x_coord=XCoord.FixedStrike,
-                y_coord=YCoord.Volatility,
-                metadata=META,
-            )
-
     def test_y_mid(self) -> None:
         sd = SmileData(
-            x=STRIKES,
-            y_bid=VOLS_BID,
-            y_ask=VOLS_ASK,
+            strikearray=_make_sa(STRIKES, VOLS_BID, VOLS_ASK),
             x_coord=XCoord.FixedStrike,
             y_coord=YCoord.Volatility,
             metadata=META,
@@ -430,9 +432,7 @@ class TestSmileDataConstruction:
 class TestSmileDataTransform:
     def test_identity(self) -> None:
         sd = SmileData(
-            x=STRIKES,
-            y_bid=VOLS_BID,
-            y_ask=VOLS_ASK,
+            strikearray=_make_sa(STRIKES, VOLS_BID, VOLS_ASK),
             x_coord=XCoord.FixedStrike,
             y_coord=YCoord.Volatility,
             metadata=META,
@@ -444,9 +444,7 @@ class TestSmileDataTransform:
 
     def test_x_only_transform(self) -> None:
         sd = SmileData(
-            x=STRIKES,
-            y_bid=VOLS_BID,
-            y_ask=VOLS_ASK,
+            strikearray=_make_sa(STRIKES, VOLS_BID, VOLS_ASK),
             x_coord=XCoord.FixedStrike,
             y_coord=YCoord.Volatility,
             metadata=META,
@@ -459,9 +457,7 @@ class TestSmileDataTransform:
 
     def test_y_only_transform(self) -> None:
         sd = SmileData(
-            x=STRIKES,
-            y_bid=VOLS_BID,
-            y_ask=VOLS_ASK,
+            strikearray=_make_sa(STRIKES, VOLS_BID, VOLS_ASK),
             x_coord=XCoord.FixedStrike,
             y_coord=YCoord.Volatility,
             metadata=META,
@@ -473,9 +469,7 @@ class TestSmileDataTransform:
 
     def test_combined_transform(self) -> None:
         sd = SmileData(
-            x=STRIKES,
-            y_bid=VOLS_BID,
-            y_ask=VOLS_ASK,
+            strikearray=_make_sa(STRIKES, VOLS_BID, VOLS_ASK),
             x_coord=XCoord.FixedStrike,
             y_coord=YCoord.Volatility,
             metadata=META,
@@ -487,9 +481,7 @@ class TestSmileDataTransform:
 
     def test_round_trip(self) -> None:
         sd = SmileData(
-            x=STRIKES,
-            y_bid=VOLS_BID,
-            y_ask=VOLS_ASK,
+            strikearray=_make_sa(STRIKES, VOLS_BID, VOLS_ASK),
             x_coord=XCoord.FixedStrike,
             y_coord=YCoord.Volatility,
             metadata=META,
@@ -505,9 +497,7 @@ class TestSmileDataTransform:
             date=pd.Timestamp("2024-01-01"), expiry=pd.Timestamp("2024-04-01"), forward=100.0, discount_factor=0.99
         )
         sd = SmileData(
-            x=STRIKES,
-            y_bid=VOLS_BID,
-            y_ask=VOLS_ASK,
+            strikearray=_make_sa(STRIKES, VOLS_BID, VOLS_ASK),
             x_coord=XCoord.FixedStrike,
             y_coord=YCoord.Volatility,
             metadata=meta_no_atm,
@@ -517,9 +507,7 @@ class TestSmileDataTransform:
 
     def test_vol_to_price_round_trip(self) -> None:
         sd = SmileData(
-            x=STRIKES,
-            y_bid=VOLS_BID,
-            y_ask=VOLS_ASK,
+            strikearray=_make_sa(STRIKES, VOLS_BID, VOLS_ASK),
             x_coord=XCoord.FixedStrike,
             y_coord=YCoord.Volatility,
             metadata=META,
@@ -544,9 +532,7 @@ def _make_unitised_smile_data() -> SmileData:
     v_mid = sigma_atm**2 * expiry * (1 + 0.1 * k**2)
     spread = 0.001
     return SmileData(
-        x=k,
-        y_bid=v_mid - spread,
-        y_ask=v_mid + spread,
+        strikearray=_make_sa(k, v_mid - spread, v_mid + spread),
         x_coord=XCoord.StandardisedStrike,
         y_coord=YCoord.TotalVariance,
         metadata=SmileMetadata(
@@ -598,86 +584,82 @@ class TestSmileDataVolumeOpenInterest:
 
     def test_with_volume_and_open_interest(self):
         sd = SmileData(
-            x=np.array([90.0, 100.0, 110.0]),
-            y_bid=np.array([0.19, 0.18, 0.20]),
-            y_ask=np.array([0.21, 0.20, 0.22]),
+            strikearray=_make_sa(
+                np.array([90.0, 100.0, 110.0]),
+                np.array([0.19, 0.18, 0.20]),
+                np.array([0.21, 0.20, 0.22]),
+                volume=np.array([100.0, 200.0, 150.0]),
+                open_interest=np.array([1000.0, 2000.0, 1500.0]),
+            ),
             x_coord=XCoord.FixedStrike,
             y_coord=YCoord.Volatility,
             metadata=self._meta(),
-            volume=np.array([100.0, 200.0, 150.0]),
-            open_interest=np.array([1000.0, 2000.0, 1500.0]),
         )
         np.testing.assert_array_equal(sd.volume, [100.0, 200.0, 150.0])
         np.testing.assert_array_equal(sd.open_interest, [1000.0, 2000.0, 1500.0])
 
     def test_coerced_to_float64(self):
         sd = SmileData(
-            x=np.array([90.0, 100.0, 110.0]),
-            y_bid=np.array([0.19, 0.18, 0.20]),
-            y_ask=np.array([0.21, 0.20, 0.22]),
+            strikearray=_make_sa(
+                np.array([90.0, 100.0, 110.0]),
+                np.array([0.19, 0.18, 0.20]),
+                np.array([0.21, 0.20, 0.22]),
+                volume=[100, 200, 150],
+                open_interest=[1000, 2000, 1500],
+            ),
             x_coord=XCoord.FixedStrike,
             y_coord=YCoord.Volatility,
             metadata=self._meta(),
-            volume=[100, 200, 150],
-            open_interest=[1000, 2000, 1500],
         )
         assert sd.volume.dtype == np.float64
         assert sd.open_interest.dtype == np.float64
 
-    def test_volume_length_mismatch(self):
-        with pytest.raises(ValueError, match="volume must have the same length"):
-            SmileData(
-                x=np.array([90.0, 100.0, 110.0]),
-                y_bid=np.array([0.19, 0.18, 0.20]),
-                y_ask=np.array([0.21, 0.20, 0.22]),
-                x_coord=XCoord.FixedStrike,
-                y_coord=YCoord.Volatility,
-                metadata=self._meta(),
-                volume=np.array([100.0, 200.0]),
-            )
-
-    def test_open_interest_length_mismatch(self):
-        with pytest.raises(ValueError, match="open_interest must have the same length"):
-            SmileData(
-                x=np.array([90.0, 100.0, 110.0]),
-                y_bid=np.array([0.19, 0.18, 0.20]),
-                y_ask=np.array([0.21, 0.20, 0.22]),
-                x_coord=XCoord.FixedStrike,
-                y_coord=YCoord.Volatility,
-                metadata=self._meta(),
-                open_interest=np.array([1000.0]),
-            )
-
     def test_negative_volume_rejected(self):
         with pytest.raises(ValueError, match="volume must be non-negative"):
             SmileData(
-                x=np.array([90.0, 100.0, 110.0]),
-                y_bid=np.array([0.19, 0.18, 0.20]),
-                y_ask=np.array([0.21, 0.20, 0.22]),
+                strikearray=_make_sa(
+                    np.array([90.0, 100.0, 110.0]),
+                    np.array([0.19, 0.18, 0.20]),
+                    np.array([0.21, 0.20, 0.22]),
+                    volume=np.array([100.0, -1.0, 150.0]),
+                ),
                 x_coord=XCoord.FixedStrike,
                 y_coord=YCoord.Volatility,
                 metadata=self._meta(),
-                volume=np.array([100.0, -1.0, 150.0]),
             )
 
     def test_negative_open_interest_rejected(self):
         with pytest.raises(ValueError, match="open_interest must be non-negative"):
             SmileData(
-                x=np.array([90.0, 100.0, 110.0]),
-                y_bid=np.array([0.19, 0.18, 0.20]),
-                y_ask=np.array([0.21, 0.20, 0.22]),
+                strikearray=_make_sa(
+                    np.array([90.0, 100.0, 110.0]),
+                    np.array([0.19, 0.18, 0.20]),
+                    np.array([0.21, 0.20, 0.22]),
+                    open_interest=np.array([1000.0, 2000.0, -1.0]),
+                ),
                 x_coord=XCoord.FixedStrike,
                 y_coord=YCoord.Volatility,
                 metadata=self._meta(),
-                open_interest=np.array([1000.0, 2000.0, -1.0]),
             )
 
     def test_transform_preserves_volume_and_oi(self):
+        strikes = np.array([85.0, 90.0, 95.0, 100.0, 105.0, 110.0, 115.0])
+        vol_mid = np.array([0.28, 0.25, 0.22, 0.20, 0.21, 0.23, 0.26])
+        spread = 0.005
         vol = np.array([100.0, 200.0, 150.0, 300.0, 250.0, 180.0, 120.0])
         oi = np.array([1000.0, 2000.0, 1500.0, 3000.0, 2500.0, 1800.0, 1200.0])
-        sd = _make_vol_smile_data()
-        sd.volume = vol
-        sd.open_interest = oi
+        sd = SmileData(
+            strikearray=_make_sa(strikes, vol_mid - spread, vol_mid + spread, volume=vol, open_interest=oi),
+            x_coord=XCoord.FixedStrike,
+            y_coord=YCoord.Volatility,
+            metadata=SmileMetadata(
+                date=pd.Timestamp("2024-01-01"),
+                expiry=pd.Timestamp("2024-07-01"),
+                forward=100.0,
+                discount_factor=0.98,
+                sigma_atm=0.20,
+            ),
+        )
         sd_u = sd.transform(XCoord.StandardisedStrike, YCoord.TotalVariance)
         np.testing.assert_array_equal(sd_u.volume, vol)
         np.testing.assert_array_equal(sd_u.open_interest, oi)

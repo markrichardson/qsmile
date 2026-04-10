@@ -68,15 +68,19 @@ make install
 ```python +RHIZA_SKIP
 import numpy as np
 import pandas as pd
-from qsmile import OptionChain, SmileData, SmileMetadata, SVIModel, XCoord, YCoord, fit
+from qsmile import OptionChain, SmileData, SmileMetadata, StrikeArray, SVIModel, XCoord, YCoord, fit
 
 # Bid/ask prices — forward and DF are calibrated automatically
+strikes = np.array([80, 90, 95, 100, 105, 110, 120], dtype=float)
+idx = pd.Index(strikes, dtype=np.float64)
+sa = StrikeArray()
+sa.set(("call", "bid"), pd.Series([20.5, 11.8, 7.5, 4.2, 2.0, 0.8, 0.1], index=idx))
+sa.set(("call", "ask"), pd.Series([21.5, 12.4, 8.0, 4.6, 2.3, 1.0, 0.2], index=idx))
+sa.set(("put", "bid"), pd.Series([0.1, 0.6, 1.5, 3.1, 5.8, 9.6, 18.8], index=idx))
+sa.set(("put", "ask"), pd.Series([0.2, 0.8, 1.8, 3.5, 6.2, 10.2, 19.6], index=idx))
+
 prices = OptionChain(
-    strikes=np.array([80, 90, 95, 100, 105, 110, 120], dtype=float),
-    call_bid=np.array([20.5, 11.8, 7.5, 4.2, 2.0, 0.8, 0.1]),
-    call_ask=np.array([21.5, 12.4, 8.0, 4.6, 2.3, 1.0, 0.2]),
-    put_bid=np.array([0.1, 0.6, 1.5, 3.1, 5.8, 9.6, 18.8]),
-    put_ask=np.array([0.2, 0.8, 1.8, 3.5, 6.2, 10.2, 19.6]),
+    strikedata=sa,
     metadata=SmileMetadata(date=pd.Timestamp("2024-01-01"), expiry=pd.Timestamp("2024-07-01")),
 )
 print(prices.metadata.forward)          # Calibrated forward

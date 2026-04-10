@@ -35,6 +35,7 @@ with app.setup:
         OptionChain,
         SABRModel,
         SmileMetadata,
+        StrikeArray,
         SVIModel,
         XCoord,
         YCoord,
@@ -151,15 +152,18 @@ def cell_build_and_filter(
     )
 
     # -- Build the raw (unfiltered) chain --
+    _idx = pd.Index(strikes, dtype=np.float64)
+    _sa = StrikeArray()
+    _sa.set(("call", "bid"), pd.Series(call_bid, index=_idx))
+    _sa.set(("call", "ask"), pd.Series(call_ask, index=_idx))
+    _sa.set(("put", "bid"), pd.Series(put_bid, index=_idx))
+    _sa.set(("put", "ask"), pd.Series(put_ask, index=_idx))
+    _sa.set(("meta", "volume"), pd.Series(volume, index=_idx))
+    _sa.set(("meta", "open_interest"), pd.Series(oi, index=_idx))
+
     chain_raw = OptionChain(
-        strikes=strikes,
-        call_bid=call_bid,
-        call_ask=call_ask,
-        put_bid=put_bid,
-        put_ask=put_ask,
+        strikedata=_sa,
         metadata=metadata,
-        volume=volume,
-        open_interest=oi,
     )
 
     # -- Filter immediately --
