@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Generic
 
 import numpy as np
 from numpy.typing import NDArray
@@ -11,20 +10,17 @@ from scipy.optimize import least_squares
 
 from qsmile.data.meta import SmileMetadata
 from qsmile.data.vols import SmileData
-from qsmile.models.protocol import M, SmileModel
+from qsmile.models.protocol import SmileModel
 
 
 @dataclass
-class SmileResult(Generic[M]):
+class SmileResult:
     """Result of a smile model fit.
-
-    Generic over ``M`` so that ``result.params`` preserves the
-    concrete model type (e.g. ``SVIModel``).
 
     Attributes:
     ----------
-    params : M
-        Fitted model instance (coordinate-aware, callable).
+    model : SmileModel
+        Fitted model instance (coordinate-aware).
     residuals : NDArray[np.float64]
         Per-observation residuals (model minus observed values in native coordinates).
     rmse : float
@@ -33,7 +29,7 @@ class SmileResult(Generic[M]):
         Whether the optimiser converged.
     """
 
-    params: M
+    model: SmileModel
     residuals: NDArray[np.float64]
     rmse: float
     success: bool
@@ -54,9 +50,9 @@ def _residuals(
 
 def fit(
     chain: SmileData,
-    model: type[M],
-    initial_guess: M | None = None,
-) -> SmileResult[M]:
+    model: type[SmileModel],
+    initial_guess: SmileModel | None = None,
+) -> SmileResult:
     """Fit a smile model to market data.
 
     Parameters
@@ -64,17 +60,17 @@ def fit(
     chain : SmileData
         Market data to fit. Uses mid values for fitting.
         Internally transforms to the model's native coordinates.
-    model : type[M]
+    model : type[SmileModel]
         A model class (e.g. ``SVIModel``) that defines native coordinates,
         bounds, evaluation, and initial-guess heuristic.
-    initial_guess : M, optional
+    initial_guess : SmileModel, optional
         Initial parameter guess (e.g. an ``SVIModel(...)`` instance).
         If None, the model's heuristic initial guess is computed from data.
 
     Returns:
     -------
-    SmileResult[M]
-        Fitted parameters, residuals, RMSE, and convergence status.
+    SmileResult
+        Fitted model, residuals, RMSE, and convergence status.
     """
     sd = chain.transform(model.native_x_coord, model.native_y_coord)
     x_obs = sd.x
@@ -99,7 +95,7 @@ def fit(
     rmse = float(np.sqrt(np.mean(residuals**2)))
 
     return SmileResult(
-        params=fitted_params,
+        model=fitted_params,
         residuals=residuals,
         rmse=rmse,
         success=bool(result.success),

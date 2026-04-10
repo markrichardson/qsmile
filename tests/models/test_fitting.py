@@ -49,11 +49,11 @@ class TestFitSyntheticRoundTrip:
 
         assert result.success
         assert result.rmse < 1e-10
-        np.testing.assert_allclose(result.params.a, _TRUE_PARAMS.a, atol=1e-6)
-        np.testing.assert_allclose(result.params.b, _TRUE_PARAMS.b, atol=1e-6)
-        np.testing.assert_allclose(result.params.rho, _TRUE_PARAMS.rho, atol=1e-6)
-        np.testing.assert_allclose(result.params.m, _TRUE_PARAMS.m, atol=1e-6)
-        np.testing.assert_allclose(result.params.sigma, _TRUE_PARAMS.sigma, atol=1e-6)
+        np.testing.assert_allclose(result.model.a, _TRUE_PARAMS.a, atol=1e-6)
+        np.testing.assert_allclose(result.model.b, _TRUE_PARAMS.b, atol=1e-6)
+        np.testing.assert_allclose(result.model.rho, _TRUE_PARAMS.rho, atol=1e-6)
+        np.testing.assert_allclose(result.model.m, _TRUE_PARAMS.m, atol=1e-6)
+        np.testing.assert_allclose(result.model.sigma, _TRUE_PARAMS.sigma, atol=1e-6)
 
     def test_non_native_coords_accepted(self):
         """SmileData in (FixedStrike, Volatility) — non-native for SVI — still fits."""
@@ -113,12 +113,12 @@ class TestSmileResult:
 
         assert result.residuals.shape == (10,)
         assert isinstance(result.rmse, float)
-        assert isinstance(result.params, SVIModel)
+        assert isinstance(result.model, SVIModel)
 
     def test_fitted_params_within_bounds(self):
         sd = _make_synthetic_sd()
         result = fit(sd, SVIModel)
 
-        assert result.params.b >= 0
-        assert -1 < result.params.rho < 1
-        assert result.params.sigma > 0
+        assert result.model.b >= 0
+        assert -1 < result.model.rho < 1
+        assert result.model.sigma > 0

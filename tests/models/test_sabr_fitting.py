@@ -44,25 +44,25 @@ class TestFitSABRSyntheticRoundTrip:
 
         assert result.success
         assert result.rmse < 1e-6
-        assert isinstance(result.params, SABRModel)
+        assert isinstance(result.model, SABRModel)
         assert isinstance(result, SmileResult)
 
     def test_fitted_params_close_to_true(self):
         sd = _make_synthetic_sabr_sd()
         result = fit(sd, SABRModel)
 
-        np.testing.assert_allclose(result.params.alpha, _TRUE_PARAMS.alpha, rtol=0.05)
-        np.testing.assert_allclose(result.params.beta, _TRUE_PARAMS.beta, atol=0.1)
-        np.testing.assert_allclose(result.params.rho, _TRUE_PARAMS.rho, atol=0.1)
-        np.testing.assert_allclose(result.params.nu, _TRUE_PARAMS.nu, rtol=0.1)
+        np.testing.assert_allclose(result.model.alpha, _TRUE_PARAMS.alpha, rtol=0.05)
+        np.testing.assert_allclose(result.model.beta, _TRUE_PARAMS.beta, atol=0.1)
+        np.testing.assert_allclose(result.model.rho, _TRUE_PARAMS.rho, atol=0.1)
+        np.testing.assert_allclose(result.model.nu, _TRUE_PARAMS.nu, rtol=0.1)
 
     def test_context_fields_preserved(self):
         """Metadata should be on the fitted result."""
         sd = _make_synthetic_sabr_sd()
         result = fit(sd, SABRModel)
 
-        assert result.params.metadata.texpiry == pytest.approx(_SABR_META.texpiry)
-        assert result.params.metadata.forward == _SABR_META.forward
+        assert result.model.metadata.texpiry == pytest.approx(_SABR_META.texpiry)
+        assert result.model.metadata.forward == _SABR_META.forward
 
 
 class TestFitSABRNoisyData:

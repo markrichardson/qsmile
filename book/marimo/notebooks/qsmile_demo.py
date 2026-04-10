@@ -412,7 +412,7 @@ def cell_svi_intro():
 def cell_svi_fit(sd_vols):
     """Fit SVI to the market smile."""
     svi_result = fit(sd_vols, SVIModel)
-    p = svi_result.params
+    p = svi_result.model
 
     _params_table = f"""
     ### SVI Parameters
@@ -447,7 +447,7 @@ def cell_svi_plot(sd_vols, svi_result):
     _fwd = sd_vols.metadata.forward
     _k_fine = np.linspace(sd_vols.x.min() * 0.95, sd_vols.x.max() * 1.05, 300)
     _log_k = np.log(_k_fine / _fwd)
-    _iv_svi = svi_result.params.transform(XCoord.LogMoneynessStrike, YCoord.Volatility).evaluate(_log_k)
+    _iv_svi = svi_result.model.transform(XCoord.LogMoneynessStrike, YCoord.Volatility).evaluate(_log_k)
 
     _fig = go.Figure()
     _fig.add_trace(
@@ -519,7 +519,7 @@ def cell_sabr_intro():
 def cell_sabr_fit(sd_vols):
     """Fit SABR to the market smile."""
     sabr_result = fit(sd_vols, SABRModel)
-    sp = sabr_result.params
+    sp = sabr_result.model
 
     _params_table = f"""
     ### SABR Parameters
@@ -553,7 +553,7 @@ def cell_sabr_plot(sabr_result, sd_vols):
     _fwd = sd_vols.metadata.forward
     _k_fine = np.linspace(sd_vols.x.min() * 0.95, sd_vols.x.max() * 1.05, 300)
     _log_k = np.log(_k_fine / _fwd)
-    _iv_sabr = sabr_result.params.evaluate(_log_k)
+    _iv_sabr = sabr_result.model.evaluate(_log_k)
 
     _fig = go.Figure()
     _fig.add_trace(
@@ -613,8 +613,8 @@ def cell_model_comparison(sabr_result, sd_vols, svi_result):
     _k_fine = np.linspace(sd_vols.x.min() * 0.95, sd_vols.x.max() * 1.05, 300)
     _log_k = np.log(_k_fine / _fwd)
 
-    _iv_svi = svi_result.params.transform(XCoord.LogMoneynessStrike, YCoord.Volatility).evaluate(_log_k)
-    _iv_sabr = sabr_result.params.evaluate(_log_k)
+    _iv_svi = svi_result.model.transform(XCoord.LogMoneynessStrike, YCoord.Volatility).evaluate(_log_k)
+    _iv_sabr = sabr_result.model.evaluate(_log_k)
 
     _fig = go.Figure()
     _fig.add_trace(

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, replace
-from typing import TYPE_CHECKING, ClassVar, Self, TypeVar
+from typing import TYPE_CHECKING, ClassVar, Self
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
@@ -146,6 +146,3 @@ class SmileModel(ABC):
             ylabel=self.current_y_coord.name,
             title=title,
         )
-
-
-M = TypeVar("M", bound=SmileModel)
