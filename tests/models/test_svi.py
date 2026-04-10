@@ -77,28 +77,8 @@ class TestSVITotalVariance:
         np.testing.assert_allclose(params.evaluate(k), expected)
 
 
-class TestSVIImpliedVol:
-    def test_basic(self):
-        params = SVIModel(a=0.04, b=0.1, rho=-0.3, m=0.0, sigma=0.2, metadata=_META)
-        expiry = 0.5
-        k = np.array([-0.1, 0.0, 0.1])
-        iv = params.implied_vol(k, expiry)
-        w = params.evaluate(k)
-        np.testing.assert_allclose(iv, np.sqrt(w / expiry))
-
-    def test_non_positive_expiry(self):
-        params = SVIModel(a=0.04, b=0.1, rho=-0.3, m=0.0, sigma=0.2, metadata=_META)
-        with pytest.raises(ValueError, match="expiry must be positive"):
-            params.implied_vol(0.0, 0.0)
-
-    def test_negative_expiry(self):
-        params = SVIModel(a=0.04, b=0.1, rho=-0.3, m=0.0, sigma=0.2, metadata=_META)
-        with pytest.raises(ValueError, match="expiry must be positive"):
-            params.implied_vol(0.0, -1.0)
-
-
 class TestSVIModelProtocol:
-    """SVIModel satisfies the SmileModel protocol."""
+    """SVIModel satisfies the SmileModel ABC."""
 
     def test_isinstance_check(self):
         p = SVIModel(a=0.04, b=0.1, rho=-0.3, m=0.0, sigma=0.2, metadata=_META)
@@ -144,10 +124,10 @@ class TestSVIModelCoordAware:
         assert t.current_x_coord == XCoord.FixedStrike
         assert t.current_y_coord == YCoord.Volatility
 
-    def test_call_in_native_equals_evaluate(self):
+    def test_evaluate_in_native_equals_raw(self):
         p = SVIModel(a=0.04, b=0.1, rho=-0.3, m=0.0, sigma=0.2, metadata=_META)
         k = np.array([-0.1, 0.0, 0.1])
-        np.testing.assert_allclose(p(k), p.evaluate(k))
+        np.testing.assert_allclose(p.evaluate(k), p._evaluate(k))
 
     def test_params_dict(self):
         p = SVIModel(a=0.04, b=0.1, rho=-0.3, m=0.0, sigma=0.2, metadata=_META)

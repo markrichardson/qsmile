@@ -1,10 +1,10 @@
-"""SmileModel protocol and AbstractSmileModel base class."""
+"""SmileModel abstract base class."""
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, replace
-from typing import TYPE_CHECKING, ClassVar, Protocol, Self, TypeVar, runtime_checkable
+from typing import TYPE_CHECKING, ClassVar, Self, TypeVar
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
@@ -17,71 +17,8 @@ if TYPE_CHECKING:
     from qsmile.data.meta import SmileMetadata
 
 
-@runtime_checkable
-class SmileModel(Protocol):
-    """Protocol that every smile model class must satisfy.
-
-    A conforming class acts as both a model definition (class-level
-    metadata such as native coordinates and bounds) and a fitted
-    parameter container (instance-level evaluation and serialisation).
-
-    Models are coordinate-aware: they carry ``current_x_coord`` and
-    ``current_y_coord`` alongside their native coordinates, and can
-    be evaluated or transformed in arbitrary coordinate systems.
-
-    Example::
-
-        result = fit(sd, SVIModel)
-        result.params(k)               # evaluate in current coords
-        result.params.transform(XCoord.FixedStrike, YCoord.Volatility)(strikes)
-    """
-
-    native_x_coord: XCoord
-    native_y_coord: YCoord
-    current_x_coord: XCoord
-    current_y_coord: YCoord
-    param_names: tuple[str, ...]
-    bounds: tuple[list[float], list[float]]
-    metadata: SmileMetadata
-
-    @property
-    def params(self) -> dict[str, float]:
-        """Parameter name-to-value mapping."""
-        ...
-
-    def evaluate(self, x: ArrayLike) -> NDArray[np.float64] | np.float64:
-        """Compute model output at x values in native coordinates."""
-        ...
-
-    def __call__(self, x: ArrayLike) -> NDArray[np.float64] | np.float64:
-        """Compute model output at x values in current coordinates."""
-        ...
-
-    def to_array(self) -> NDArray[np.float64]:
-        """Pack parameters into a flat array."""
-        ...
-
-    @classmethod
-    def from_array(cls, x: NDArray[np.float64], *, metadata: SmileMetadata) -> Self:
-        """Reconstruct an instance from a flat parameter array."""
-        ...
-
-    @staticmethod
-    def initial_guess(x: NDArray[np.float64], y: NDArray[np.float64]) -> NDArray[np.float64]:
-        """Compute a heuristic initial guess from observed data."""
-        ...
-
-    def transform(self, target_x: XCoord, target_y: YCoord) -> Self:
-        """Return a copy expressed in the target coordinate system."""
-        ...
-
-    def plot(self, *, title: str = "Smile Model") -> matplotlib.figure.Figure:
-        """Plot the model curve in current coordinates."""
-        ...
-
-
 @dataclass
-class AbstractSmileModel(ABC):
+class SmileModel(ABC):
     """Abstract base for dataclass-based smile models.
 
     Provides coordinate-aware evaluation, transformation, plotting,
@@ -89,7 +26,7 @@ class AbstractSmileModel(ABC):
 
     - Dataclass fields for the fitted parameters
     - ``native_x_coord``, ``native_y_coord``, ``param_names``, ``bounds`` ClassVars
-    - ``evaluate(x)`` instance method
+    - ``_evaluate(x)`` instance method (raw formula in native coordinates)
     - ``initial_guess(x, y)`` static method
     - ``__post_init__()`` for validation (optional)
     """
@@ -128,7 +65,7 @@ class AbstractSmileModel(ABC):
         return cls(**params, metadata=metadata)
 
     @abstractmethod
-    def evaluate(self, x: ArrayLike) -> NDArray[np.float64] | np.float64:
+    def _evaluate(self, x: ArrayLike) -> NDArray[np.float64] | np.float64:
         """Compute model output at x values in native coordinates."""
         ...
 
@@ -138,7 +75,7 @@ class AbstractSmileModel(ABC):
         """Compute a heuristic initial guess from observed data."""
         ...
 
-    def __call__(self, x: ArrayLike) -> NDArray[np.float64] | np.float64:
+    def evaluate(self, x: ArrayLike) -> NDArray[np.float64] | np.float64:
         """Evaluate at *x* in current coordinates, transforming as needed."""
         from qsmile.core.maps import (
             apply_x_chain,
@@ -154,14 +91,14 @@ class AbstractSmileModel(ABC):
             self.current_x_coord == self.__class__.native_x_coord
             and self.current_y_coord == self.__class__.native_y_coord
         ):
-            return self.evaluate(x_arr)
+            return self._evaluate(x_arr)
 
         # Transform x: current → native
         x_chain = compose_x_maps(self.current_x_coord, self.__class__.native_x_coord)
         native_x = apply_x_chain(x_arr, x_chain, self.metadata)
 
         # Evaluate in native coords
-        native_y = np.asarray(self.evaluate(native_x), dtype=np.float64)
+        native_y = np.asarray(self._evaluate(native_x), dtype=np.float64)
 
         # Transform y: native → current
         y_chain = compose_y_maps(self.__class__.native_y_coord, self.current_y_coord)
@@ -200,7 +137,7 @@ class AbstractSmileModel(ABC):
         inv_chain = compose_x_maps(self.__class__.native_x_coord, self.current_x_coord)
         x_grid = apply_x_chain(native_grid, inv_chain, self.metadata)
 
-        y_grid = np.asarray(self(x_grid), dtype=np.float64)
+        y_grid = np.asarray(self.evaluate(x_grid), dtype=np.float64)
 
         return plot_line(
             x_grid,

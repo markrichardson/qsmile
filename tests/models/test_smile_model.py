@@ -1,4 +1,4 @@
-"""Tests for qsmile.models.protocol.AbstractSmileModel."""
+"""Tests for qsmile.models.protocol.SmileModel."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from numpy.typing import ArrayLike, NDArray
 
 from qsmile.core.coords import XCoord, YCoord
 from qsmile.data.meta import SmileMetadata
-from qsmile.models.protocol import AbstractSmileModel, SmileModel
+from qsmile.models.protocol import SmileModel
 
 _META = SmileMetadata(
     date=pd.Timestamp("2024-01-01"),
@@ -23,7 +23,7 @@ _META = SmileMetadata(
 
 
 @dataclass
-class _ConcreteModel(AbstractSmileModel):
+class _ConcreteModel(SmileModel):
     """Minimal concrete subclass for testing."""
 
     p1: float
@@ -34,7 +34,7 @@ class _ConcreteModel(AbstractSmileModel):
     param_names: ClassVar[tuple[str, ...]] = ("p1", "p2")
     bounds: ClassVar[tuple[list[float], list[float]]] = ([-1.0, -1.0], [1.0, 1.0])
 
-    def evaluate(self, x: ArrayLike) -> NDArray[np.float64] | np.float64:
+    def _evaluate(self, x: ArrayLike) -> NDArray[np.float64] | np.float64:
         k = np.asarray(x, dtype=np.float64)
         return self.p1 + self.p2 * k
 
@@ -43,13 +43,13 @@ class _ConcreteModel(AbstractSmileModel):
         return np.array([0.0, 0.0])
 
 
-class TestAbstractSmileModelCannotInstantiate:
+class TestSmileModelCannotInstantiate:
     def test_direct_instantiation_raises(self):
         with pytest.raises(TypeError):
-            AbstractSmileModel(metadata=_META)
+            SmileModel(metadata=_META)
 
 
-class TestAbstractSmileModelToArray:
+class TestSmileModelToArray:
     def test_to_array_uses_param_names(self):
         m = _ConcreteModel(p1=0.5, p2=-0.3, metadata=_META)
         arr = m.to_array()
@@ -61,7 +61,7 @@ class TestAbstractSmileModelToArray:
         assert arr.dtype == np.float64
 
 
-class TestAbstractSmileModelFromArray:
+class TestSmileModelFromArray:
     def test_from_array_reconstructs(self):
         arr = np.array([0.5, -0.3])
         m = _ConcreteModel.from_array(arr, metadata=_META)
@@ -85,13 +85,13 @@ class TestAbstractSmileModelFromArray:
         assert m.metadata is _META
 
 
-class TestAbstractSmileModelProtocolConformance:
+class TestSmileModelProtocolConformance:
     def test_isinstance_check(self):
         m = _ConcreteModel(p1=0.5, p2=-0.3, metadata=_META)
         assert isinstance(m, SmileModel)
 
 
-class TestAbstractSmileModelParams:
+class TestSmileModelParams:
     def test_params_returns_dict(self):
         m = _ConcreteModel(p1=0.5, p2=-0.3, metadata=_META)
         p = m.params
@@ -102,7 +102,7 @@ class TestAbstractSmileModelParams:
         assert tuple(m.params.keys()) == m.param_names
 
 
-class TestAbstractSmileModelCurrentCoords:
+class TestSmileModelCurrentCoords:
     def test_defaults_to_native(self):
         m = _ConcreteModel(p1=0.5, p2=-0.3, metadata=_META)
         assert m.current_x_coord == XCoord.LogMoneynessStrike
@@ -126,22 +126,22 @@ class TestAbstractSmileModelCurrentCoords:
         assert m.current_y_coord == YCoord.TotalVariance
 
 
-class TestAbstractSmileModelCall:
-    def test_call_in_native_coords_equals_evaluate(self):
+class TestSmileModelEvaluate:
+    def test_evaluate_in_native_coords_equals_raw(self):
         m = _ConcreteModel(p1=0.5, p2=-0.3, metadata=_META)
         x = np.array([-0.1, 0.0, 0.1])
-        np.testing.assert_allclose(m(x), m.evaluate(x))
+        np.testing.assert_allclose(m.evaluate(x), m._evaluate(x))
 
-    def test_call_transforms_coords(self):
+    def test_evaluate_transforms_coords(self):
         m = _ConcreteModel(p1=0.04, p2=0.1, metadata=_META)
         t = m.transform(XCoord.MoneynessStrike, YCoord.TotalVariance)
         # Should not raise and should return finite values
         moneyness = np.array([0.9, 1.0, 1.1])
-        y = t(moneyness)
+        y = t.evaluate(moneyness)
         assert np.all(np.isfinite(y))
 
 
-class TestAbstractSmileModelMetadata:
+class TestSmileModelMetadata:
     def test_metadata_available(self):
         m = _ConcreteModel(p1=0.5, p2=-0.3, metadata=_META)
         assert m.metadata is _META
@@ -152,7 +152,7 @@ class TestAbstractSmileModelMetadata:
         assert t.metadata is _META
 
 
-class TestAbstractSmileModelPlot:
+class TestSmileModelPlot:
     def test_plot_returns_figure(self):
         m = _ConcreteModel(p1=0.04, p2=0.1, metadata=_META)
         fig = m.plot()

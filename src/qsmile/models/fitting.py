@@ -48,7 +48,7 @@ def _residuals(
 ) -> NDArray[np.float64]:
     """Residual function for least_squares: model - observed."""
     fitted = model.from_array(x, metadata=metadata)
-    y_model = np.asarray(fitted.evaluate(x_obs), dtype=np.float64)
+    y_model = np.asarray(fitted._evaluate(x_obs), dtype=np.float64)
     return y_model - y_obs
 
 

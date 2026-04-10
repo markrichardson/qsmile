@@ -10,14 +10,13 @@ from qsmile.data.prices import OptionChain, delta_blend_ivols
 from qsmile.data.strikes import StrikeArray
 from qsmile.data.vols import SmileData
 from qsmile.models.fitting import SmileResult, fit
-from qsmile.models.protocol import AbstractSmileModel, SmileModel
+from qsmile.models.protocol import SmileModel
 from qsmile.models.sabr import SABRModel
 from qsmile.models.svi import SVIModel
 
 __version__ = "0.8.16"
 
 __all__ = [
-    "AbstractSmileModel",
     "DayCount",
     "OptionChain",
     "SABRModel",

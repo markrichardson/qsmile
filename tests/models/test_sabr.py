@@ -177,10 +177,10 @@ class TestSABRModelCoordAware:
         assert t.current_x_coord == XCoord.FixedStrike
         assert t.current_y_coord == YCoord.TotalVariance
 
-    def test_call_in_native_equals_evaluate(self):
+    def test_evaluate_in_native_equals_raw(self):
         m = SABRModel(**_VALID_PARAMS)
         k = np.array([-0.1, 0.0, 0.1])
-        np.testing.assert_allclose(m(k), m.evaluate(k))
+        np.testing.assert_allclose(m.evaluate(k), m._evaluate(k))
 
     def test_params_dict(self):
         m = SABRModel(**_VALID_PARAMS)

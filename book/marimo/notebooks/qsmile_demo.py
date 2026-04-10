@@ -445,10 +445,9 @@ def cell_svi_fit(sd_vols):
 def cell_svi_plot(sd_vols, svi_result):
     """Overlay SVI fit on market vols."""
     _fwd = sd_vols.metadata.forward
-    _exp = sd_vols.metadata.texpiry
     _k_fine = np.linspace(sd_vols.x.min() * 0.95, sd_vols.x.max() * 1.05, 300)
     _log_k = np.log(_k_fine / _fwd)
-    _iv_svi = svi_result.params.implied_vol(_log_k, _exp)
+    _iv_svi = svi_result.params.transform(XCoord.LogMoneynessStrike, YCoord.Volatility).evaluate(_log_k)
 
     _fig = go.Figure()
     _fig.add_trace(
@@ -611,11 +610,10 @@ def cell_comparison_intro():
 def cell_model_comparison(sabr_result, sd_vols, svi_result):
     """Compare SVI and SABR fits on the same plot."""
     _fwd = sd_vols.metadata.forward
-    _exp = sd_vols.metadata.texpiry
     _k_fine = np.linspace(sd_vols.x.min() * 0.95, sd_vols.x.max() * 1.05, 300)
     _log_k = np.log(_k_fine / _fwd)
 
-    _iv_svi = svi_result.params.implied_vol(_log_k, _exp)
+    _iv_svi = svi_result.params.transform(XCoord.LogMoneynessStrike, YCoord.Volatility).evaluate(_log_k)
     _iv_sabr = sabr_result.params.evaluate(_log_k)
 
     _fig = go.Figure()

@@ -5,6 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from qsmile.core.coords import XCoord, YCoord
 from qsmile.data.meta import SmileMetadata
 from qsmile.data.vols import SmileData
 from qsmile.models.fitting import fit
@@ -33,10 +34,9 @@ def _make_synthetic_sd(
         expiry=pd.Timestamp("2024-07-01"),
         forward=forward,
     )
-    texpiry = meta.texpiry
     strikes = np.linspace(strike_lo, strike_hi, n_strikes)
     k = np.log(strikes / forward)
-    ivs = params.implied_vol(k, texpiry)
+    ivs = params.transform(XCoord.LogMoneynessStrike, YCoord.Volatility).evaluate(k)
     return SmileData.from_mid_vols(strikes=strikes, ivs=ivs, metadata=meta)
 
 
@@ -72,11 +72,10 @@ class TestFitNoisyData:
         expiry_ts = pd.Timestamp("2025-01-01")
         noisy_meta = SmileMetadata(date=date, expiry=expiry_ts, forward=100.0, sigma_atm=0.2)
         true_params = SVIModel(a=0.04, b=0.12, rho=-0.4, m=0.01, sigma=0.25, metadata=noisy_meta)
-        texpiry = noisy_meta.texpiry
         strikes = np.linspace(80, 120, 15)
         forward = 100.0
         k = np.log(strikes / forward)
-        ivs_clean = true_params.implied_vol(k, texpiry)
+        ivs_clean = true_params.transform(XCoord.LogMoneynessStrike, YCoord.Volatility).evaluate(k)
 
         rng = np.random.default_rng(42)
         noise = rng.normal(0, 0.002, size=ivs_clean.shape)

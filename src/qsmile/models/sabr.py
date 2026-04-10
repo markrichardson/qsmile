@@ -9,11 +9,11 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 from qsmile.core.coords import XCoord, YCoord
-from qsmile.models.protocol import AbstractSmileModel
+from qsmile.models.protocol import SmileModel
 
 
 @dataclass
-class SABRModel(AbstractSmileModel):
+class SABRModel(SmileModel):
     """SABR model with Hagan (2002) lognormal implied volatility approximation.
 
     The SABR model describes the dynamics of a forward rate F and its
@@ -78,7 +78,7 @@ class SABRModel(AbstractSmileModel):
             msg = f"nu must be non-negative, got {self.nu}"
             raise ValueError(msg)
 
-    def evaluate(self, x: ArrayLike) -> NDArray[np.float64] | np.float64:
+    def _evaluate(self, x: ArrayLike) -> NDArray[np.float64] | np.float64:
         """Compute Hagan (2002) lognormal implied volatility at log-moneyness values.
 
         Parameters
