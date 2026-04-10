@@ -10,7 +10,17 @@ import pytest
 
 from qsmile.core.coords import XCoord, YCoord
 from qsmile.data.meta import SmileMetadata
+from qsmile.data.strikes import StrikeArray
 from qsmile.data.vols import SmileData
+
+
+def _make_sa(strikes, y_bid, y_ask):
+    """Build a StrikeArray from parallel arrays."""
+    sa = StrikeArray()
+    idx = pd.Index(np.asarray(strikes, dtype=np.float64), dtype=np.float64)
+    sa.set("y_bid", pd.Series(np.asarray(y_bid, dtype=np.float64), index=idx))
+    sa.set("y_ask", pd.Series(np.asarray(y_ask, dtype=np.float64), index=idx))
+    return sa
 
 
 @pytest.fixture
@@ -18,9 +28,7 @@ def sample_vol_smile():
     """Create sample SmileData in (FixedStrike, Volatility) coords."""
     strikes = np.array([90.0, 100.0, 110.0])
     return SmileData(
-        x=strikes,
-        y_bid=np.array([0.24, 0.19, 0.21]),
-        y_ask=np.array([0.26, 0.21, 0.23]),
+        strikearray=_make_sa(strikes, np.array([0.24, 0.19, 0.21]), np.array([0.26, 0.21, 0.23])),
         x_coord=XCoord.FixedStrike,
         y_coord=YCoord.Volatility,
         metadata=SmileMetadata(
@@ -38,9 +46,7 @@ def sample_unitised_smile():
     """Create sample SmileData in (StandardisedStrike, TotalVariance) coords."""
     k = np.array([-1.0, 0.0, 1.0])
     return SmileData(
-        x=k,
-        y_bid=np.array([0.019, 0.018, 0.019]),
-        y_ask=np.array([0.021, 0.020, 0.021]),
+        strikearray=_make_sa(k, np.array([0.019, 0.018, 0.019]), np.array([0.021, 0.020, 0.021])),
         x_coord=XCoord.StandardisedStrike,
         y_coord=YCoord.TotalVariance,
         metadata=SmileMetadata(
@@ -91,12 +97,14 @@ class TestPricesPlot:
         call_mid = np.array([float(black76_call(F, K, D, vol, T)) for K in strikes])
         put_mid = np.array([float(black76_put(F, K, D, vol, T)) for K in strikes])
 
+        sa = StrikeArray()
+        idx = pd.Index(strikes, dtype=np.float64)
+        sa.set("call_bid", pd.Series(call_mid - 0.1, index=idx))
+        sa.set("call_ask", pd.Series(call_mid + 0.1, index=idx))
+        sa.set("put_bid", pd.Series(put_mid - 0.1, index=idx))
+        sa.set("put_ask", pd.Series(put_mid + 0.1, index=idx))
         chain = OptionChain(
-            strikes=strikes,
-            call_bid=call_mid - 0.1,
-            call_ask=call_mid + 0.1,
-            put_bid=put_mid - 0.1,
-            put_ask=put_mid + 0.1,
+            strikedata=sa,
             metadata=SmileMetadata(
                 date=pd.Timestamp("2024-01-01"), expiry=pd.Timestamp("2024-07-01"), forward=F, discount_factor=D
             ),

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import contextlib
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
 import cvxpy as cp
@@ -12,6 +12,7 @@ from numpy.typing import NDArray
 from scipy.stats import norm
 
 from qsmile.data.meta import SmileMetadata
+from qsmile.data.strikes import StrikeArray
 
 if TYPE_CHECKING:
     import matplotlib.figure
@@ -170,95 +171,102 @@ class OptionChain:
 
     Parameters
     ----------
-    strikes : NDArray[np.float64]
-        Strike prices. Must be positive.
-    call_bid : NDArray[np.float64]
-        Call bid prices. Must be non-negative.
-    call_ask : NDArray[np.float64]
-        Call ask prices. Must be >= call_bid.
-    put_bid : NDArray[np.float64]
-        Put bid prices. Must be non-negative.
-    put_ask : NDArray[np.float64]
-        Put ask prices. Must be >= put_bid.
+    strikedata : StrikeArray
+        Strike-indexed columnar data containing at least ``call_bid``,
+        ``call_ask``, ``put_bid``, and ``put_ask`` columns.
+        Optional ``volume`` and ``open_interest`` columns are supported.
     metadata : SmileMetadata
         Smile metadata. ``expiry`` must be provided.
         ``forward`` and ``discount_factor`` are calibrated from
         put-call parity if ``None``.
     """
 
-    strikes: NDArray[np.float64]
-    call_bid: NDArray[np.float64]
-    call_ask: NDArray[np.float64]
-    put_bid: NDArray[np.float64]
-    put_ask: NDArray[np.float64]
+    strikedata: StrikeArray
     metadata: SmileMetadata
-    volume: NDArray[np.float64] | None = field(default=None)
-    open_interest: NDArray[np.float64] | None = field(default=None)
 
     def __post_init__(self) -> None:
-        """Validate and convert inputs, calibrate forward/DF if needed."""
-        self.strikes = np.asarray(self.strikes, dtype=np.float64)
-        self.call_bid = np.asarray(self.call_bid, dtype=np.float64)
-        self.call_ask = np.asarray(self.call_ask, dtype=np.float64)
-        self.put_bid = np.asarray(self.put_bid, dtype=np.float64)
-        self.put_ask = np.asarray(self.put_ask, dtype=np.float64)
-
-        n = len(self.strikes)
-        for name, arr in [
-            ("call_bid", self.call_bid),
-            ("call_ask", self.call_ask),
-            ("put_bid", self.put_bid),
-            ("put_ask", self.put_ask),
-        ]:
-            if len(arr) != n:
-                msg = f"{name} must have the same length as strikes ({n}), got {len(arr)}"
-                raise ValueError(msg)
+        """Validate inputs and calibrate forward/DF if needed."""
+        sd = self.strikedata
+        strikes = sd.strikes
+        n = len(strikes)
 
         if n < 3:
             msg = f"at least 3 strikes required, got {n}"
             raise ValueError(msg)
-        if np.any(self.strikes <= 0):
+        if np.any(strikes <= 0):
             msg = "all strikes must be positive"
             raise ValueError(msg)
 
-        for name, arr in [
-            ("call_bid", self.call_bid),
-            ("call_ask", self.call_ask),
-            ("put_bid", self.put_bid),
-            ("put_ask", self.put_ask),
-        ]:
-            if np.any(arr < 0):
+        for name in ("call_bid", "call_ask", "put_bid", "put_ask"):
+            arr = sd.get_values(name)
+            if arr is not None and np.any(arr < 0):
                 msg = f"{name} must be non-negative"
                 raise ValueError(msg)
 
-        if np.any(self.call_bid > self.call_ask):
+        call_bid = sd.get_values("call_bid")
+        call_ask = sd.get_values("call_ask")
+        put_bid = sd.get_values("put_bid")
+        put_ask = sd.get_values("put_ask")
+
+        if call_bid is not None and call_ask is not None and np.any(call_bid > call_ask):
             msg = "call_bid must not exceed call_ask"
             raise ValueError(msg)
-        if np.any(self.put_bid > self.put_ask):
+        if put_bid is not None and put_ask is not None and np.any(put_bid > put_ask):
             msg = "put_bid must not exceed put_ask"
             raise ValueError(msg)
 
         for attr in ("volume", "open_interest"):
-            arr = getattr(self, attr)
-            if arr is not None:
-                arr = np.asarray(arr, dtype=np.float64)
-                setattr(self, attr, arr)
-                if len(arr) != n:
-                    msg = f"{attr} must have the same length as strikes ({n}), got {len(arr)}"
-                    raise ValueError(msg)
-                if np.any(arr < 0):
-                    msg = f"{attr} must be non-negative"
-                    raise ValueError(msg)
+            arr = sd.get_values(attr)
+            if arr is not None and np.any(arr < 0):
+                msg = f"{attr} must be non-negative"
+                raise ValueError(msg)
 
         # Calibrate forward and discount factor if not provided
         meta = self.metadata
         if meta.forward is None or meta.discount_factor is None:
-            f_cal, d_cal = _calibrate_forward_df(self.strikes, self.call_mid, self.put_mid)
+            f_cal, d_cal = _calibrate_forward_df(strikes, self.call_mid, self.put_mid)
             self.metadata = replace(
                 meta,
                 forward=meta.forward if meta.forward is not None else f_cal,
                 discount_factor=meta.discount_factor if meta.discount_factor is not None else d_cal,
             )
+
+    # ── convenience accessors ─────────────────────────────────────
+
+    @property
+    def strikes(self) -> NDArray[np.float64]:
+        """Strike prices."""
+        return self.strikedata.strikes
+
+    @property
+    def call_bid(self) -> NDArray[np.float64]:
+        """Call bid prices."""
+        return self.strikedata.values("call_bid")
+
+    @property
+    def call_ask(self) -> NDArray[np.float64]:
+        """Call ask prices."""
+        return self.strikedata.values("call_ask")
+
+    @property
+    def put_bid(self) -> NDArray[np.float64]:
+        """Put bid prices."""
+        return self.strikedata.values("put_bid")
+
+    @property
+    def put_ask(self) -> NDArray[np.float64]:
+        """Put ask prices."""
+        return self.strikedata.values("put_ask")
+
+    @property
+    def volume(self) -> NDArray[np.float64] | None:
+        """Per-strike traded volume, or None."""
+        return self.strikedata.get_values("volume")
+
+    @property
+    def open_interest(self) -> NDArray[np.float64] | None:
+        """Per-strike open interest, or None."""
+        return self.strikedata.get_values("open_interest")
 
     @property
     def call_mid(self) -> NDArray[np.float64]:
@@ -337,15 +345,22 @@ class OptionChain:
         atm_idx = int(np.argmin(np.abs(strikes_out - meta.forward)))
         sigma_atm = float(mid_out[atm_idx])
 
+        import pandas as pd
+
+        sa = StrikeArray()
+        idx = pd.Index(strikes_out, dtype=np.float64)
+        sa.set("y_bid", pd.Series(bid_out, index=idx))
+        sa.set("y_ask", pd.Series(ask_out, index=idx))
+        if self.volume is not None:
+            sa.set("volume", pd.Series(self.volume[valid], index=idx))
+        if self.open_interest is not None:
+            sa.set("open_interest", pd.Series(self.open_interest[valid], index=idx))
+
         return SmileData(
-            x=strikes_out,
-            y_bid=bid_out,
-            y_ask=ask_out,
+            strikearray=sa,
             x_coord=XCoord.FixedStrike,
             y_coord=YCoord.Volatility,
             metadata=replace(meta, sigma_atm=sigma_atm),
-            volume=self.volume[valid] if self.volume is not None else None,
-            open_interest=self.open_interest[valid] if self.open_interest is not None else None,
         )
 
     def filter(self) -> OptionChain:
@@ -453,17 +468,12 @@ class OptionChain:
             keep_indices = np.where(keep)[0]
             keep[keep_indices[worst]] = False
 
+        filtered_sd = self.strikedata.filter(keep)
         return OptionChain(
-            strikes=self.strikes[keep],
-            call_bid=self.call_bid[keep],
-            call_ask=self.call_ask[keep],
-            put_bid=self.put_bid[keep],
-            put_ask=self.put_ask[keep],
+            strikedata=filtered_sd,
             metadata=SmileMetadata(
                 date=self.metadata.date, expiry=self.metadata.expiry, daycount=self.metadata.daycount
             ),
-            volume=self.volume[keep] if self.volume is not None else None,
-            open_interest=self.open_interest[keep] if self.open_interest is not None else None,
         )
 
     def plot(self, *, title: str = "Option Chain Prices") -> matplotlib.figure.Figure:

@@ -7,6 +7,7 @@ from qsmile.core.coords import XCoord, YCoord
 from qsmile.core.daycount import DayCount
 from qsmile.data.meta import SmileMetadata
 from qsmile.data.prices import OptionChain, delta_blend_ivols
+from qsmile.data.strikes import StrikeArray
 from qsmile.data.vols import SmileData
 from qsmile.models.fitting import SmileResult, fit
 from qsmile.models.protocol import AbstractSmileModel, SmileModel
@@ -25,6 +26,7 @@ __all__ = [
     "SmileMetadata",
     "SmileModel",
     "SmileResult",
+    "StrikeArray",
     "XCoord",
     "YCoord",
     "black76_call",

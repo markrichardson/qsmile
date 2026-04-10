@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
 import numpy as np
+import pandas as pd
 from numpy.typing import NDArray
 
 if TYPE_CHECKING:
@@ -19,6 +20,7 @@ from qsmile.core.maps import (
     compose_y_maps,
 )
 from qsmile.data.meta import SmileMetadata
+from qsmile.data.strikes import StrikeArray
 
 
 @dataclass
@@ -27,12 +29,10 @@ class SmileData:
 
     Parameters
     ----------
-    x : NDArray[np.float64]
-        X-coordinate values.
-    y_bid : NDArray[np.float64]
-        Y-coordinate bid values.
-    y_ask : NDArray[np.float64]
-        Y-coordinate ask values.
+    strikearray : StrikeArray
+        Strike-indexed data containing at least ``y_bid`` and ``y_ask``
+        columns.  Optional ``volume`` and ``open_interest`` columns are
+        supported.
     x_coord : XCoord
         Which X-coordinate system the data is in.
     y_coord : YCoord
@@ -41,57 +41,71 @@ class SmileData:
         Parameters needed by coordinate transforms.
     """
 
-    x: NDArray[np.float64]
-    y_bid: NDArray[np.float64]
-    y_ask: NDArray[np.float64]
+    strikearray: StrikeArray
     x_coord: XCoord
     y_coord: YCoord
     metadata: SmileMetadata
-    volume: NDArray[np.float64] | None = field(default=None)
-    open_interest: NDArray[np.float64] | None = field(default=None)
 
     def __post_init__(self) -> None:
-        """Validate and convert inputs."""
-        self.x = np.asarray(self.x, dtype=np.float64)
-        self.y_bid = np.asarray(self.y_bid, dtype=np.float64)
-        self.y_ask = np.asarray(self.y_ask, dtype=np.float64)
-
-        n = len(self.x)
-        if len(self.y_bid) != n or len(self.y_ask) != n:
-            msg = (
-                f"all arrays must have the same length as x ({n}), got y_bid={len(self.y_bid)}, y_ask={len(self.y_ask)}"
-            )
-            raise ValueError(msg)
+        """Validate inputs."""
+        sa = self.strikearray
+        n = len(sa)
 
         if n < 3:
             msg = f"at least 3 data points required, got {n}"
             raise ValueError(msg)
 
-        if np.any(self.y_bid > self.y_ask):
+        y_bid = sa.get_values("y_bid")
+        y_ask = sa.get_values("y_ask")
+
+        if y_bid is not None and y_ask is not None and np.any(y_bid > y_ask):
             msg = "y_bid must not exceed y_ask"
             raise ValueError(msg)
 
-        if self.x_coord in (XCoord.FixedStrike, XCoord.MoneynessStrike) and np.any(self.x <= 0):
+        x = sa.strikes
+        if self.x_coord in (XCoord.FixedStrike, XCoord.MoneynessStrike) and np.any(x <= 0):
             msg = f"all x values must be positive for {self.x_coord.name}"
             raise ValueError(msg)
 
-        if self.y_coord in (YCoord.Volatility, YCoord.Variance, YCoord.TotalVariance) and (
-            np.any(self.y_bid < 0) or np.any(self.y_ask < 0)
-        ):
-            msg = f"y values must be non-negative for {self.y_coord.name}"
-            raise ValueError(msg)
+        if self.y_coord in (YCoord.Volatility, YCoord.Variance, YCoord.TotalVariance):
+            for attr in ("y_bid", "y_ask"):
+                arr = sa.get_values(attr)
+                if arr is not None and np.any(arr < 0):
+                    msg = f"y values must be non-negative for {self.y_coord.name}"
+                    raise ValueError(msg)
 
         for attr in ("volume", "open_interest"):
-            arr = getattr(self, attr)
-            if arr is not None:
-                arr = np.asarray(arr, dtype=np.float64)
-                setattr(self, attr, arr)
-                if len(arr) != n:
-                    msg = f"{attr} must have the same length as x ({n}), got {len(arr)}"
-                    raise ValueError(msg)
-                if np.any(arr < 0):
-                    msg = f"{attr} must be non-negative"
-                    raise ValueError(msg)
+            arr = sa.get_values(attr)
+            if arr is not None and np.any(arr < 0):
+                msg = f"{attr} must be non-negative"
+                raise ValueError(msg)
+
+    # ── convenience accessors ─────────────────────────────────────
+
+    @property
+    def x(self) -> NDArray[np.float64]:
+        """X-coordinate values (strike axis)."""
+        return self.strikearray.strikes
+
+    @property
+    def y_bid(self) -> NDArray[np.float64]:
+        """Y-coordinate bid values."""
+        return self.strikearray.values("y_bid")
+
+    @property
+    def y_ask(self) -> NDArray[np.float64]:
+        """Y-coordinate ask values."""
+        return self.strikearray.values("y_ask")
+
+    @property
+    def volume(self) -> NDArray[np.float64] | None:
+        """Per-point traded volume, or None."""
+        return self.strikearray.get_values("volume")
+
+    @property
+    def open_interest(self) -> NDArray[np.float64] | None:
+        """Per-point open interest, or None."""
+        return self.strikearray.get_values("open_interest")
 
     @property
     def y_mid(self) -> NDArray[np.float64]:
@@ -132,15 +146,23 @@ class SmileData:
             sigma_atm = float((new_y_bid[atm_idx] + new_y_ask[atm_idx]) / 2.0)
             metadata = replace(metadata, sigma_atm=sigma_atm)
 
+        new_sa = StrikeArray()
+        new_idx = pd.Index(new_x, dtype=np.float64)
+        new_sa.set("y_bid", pd.Series(new_y_bid, index=new_idx))
+        new_sa.set("y_ask", pd.Series(new_y_ask, index=new_idx))
+
+        vol = self.volume
+        if vol is not None:
+            new_sa.set("volume", pd.Series(vol.copy(), index=new_idx))
+        oi = self.open_interest
+        if oi is not None:
+            new_sa.set("open_interest", pd.Series(oi.copy(), index=new_idx))
+
         return SmileData(
-            x=new_x,
-            y_bid=new_y_bid,
-            y_ask=new_y_ask,
+            strikearray=new_sa,
             x_coord=target_x,
             y_coord=target_y,
             metadata=metadata,
-            volume=self.volume.copy() if self.volume is not None else None,
-            open_interest=self.open_interest.copy() if self.open_interest is not None else None,
         )
 
     @classmethod
@@ -173,10 +195,13 @@ class SmileData:
         sigma_atm = float(ivs[atm_idx])
         meta = replace(metadata, sigma_atm=sigma_atm)
 
+        sa = StrikeArray()
+        idx = pd.Index(strikes, dtype=np.float64)
+        sa.set("y_bid", pd.Series(ivs, index=idx))
+        sa.set("y_ask", pd.Series(ivs.copy(), index=idx))
+
         return cls(
-            x=strikes,
-            y_bid=ivs,
-            y_ask=ivs.copy(),
+            strikearray=sa,
             x_coord=XCoord.FixedStrike,
             y_coord=YCoord.Volatility,
             metadata=meta,
