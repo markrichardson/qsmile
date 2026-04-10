@@ -197,16 +197,16 @@ class OptionChain:
             msg = "all strikes must be positive"
             raise ValueError(msg)
 
-        for name in ("call_bid", "call_ask", "put_bid", "put_ask"):
-            arr = sd.get_values(name)
+        for key in (("call", "bid"), ("call", "ask"), ("put", "bid"), ("put", "ask")):
+            arr = sd.get_values(key)
             if arr is not None and np.any(arr < 0):
-                msg = f"{name} must be non-negative"
+                msg = f"{key[0]}_{key[1]} must be non-negative"
                 raise ValueError(msg)
 
-        call_bid = sd.get_values("call_bid")
-        call_ask = sd.get_values("call_ask")
-        put_bid = sd.get_values("put_bid")
-        put_ask = sd.get_values("put_ask")
+        call_bid = sd.get_values(("call", "bid"))
+        call_ask = sd.get_values(("call", "ask"))
+        put_bid = sd.get_values(("put", "bid"))
+        put_ask = sd.get_values(("put", "ask"))
 
         if call_bid is not None and call_ask is not None and np.any(call_bid > call_ask):
             msg = "call_bid must not exceed call_ask"
@@ -215,10 +215,10 @@ class OptionChain:
             msg = "put_bid must not exceed put_ask"
             raise ValueError(msg)
 
-        for attr in ("volume", "open_interest"):
-            arr = sd.get_values(attr)
+        for key in (("meta", "volume"), ("meta", "open_interest")):
+            arr = sd.get_values(key)
             if arr is not None and np.any(arr < 0):
-                msg = f"{attr} must be non-negative"
+                msg = f"{key[1]} must be non-negative"
                 raise ValueError(msg)
 
         # Calibrate forward and discount factor if not provided
@@ -241,32 +241,32 @@ class OptionChain:
     @property
     def call_bid(self) -> NDArray[np.float64]:
         """Call bid prices."""
-        return self.strikedata.values("call_bid")
+        return self.strikedata.values(("call", "bid"))
 
     @property
     def call_ask(self) -> NDArray[np.float64]:
         """Call ask prices."""
-        return self.strikedata.values("call_ask")
+        return self.strikedata.values(("call", "ask"))
 
     @property
     def put_bid(self) -> NDArray[np.float64]:
         """Put bid prices."""
-        return self.strikedata.values("put_bid")
+        return self.strikedata.values(("put", "bid"))
 
     @property
     def put_ask(self) -> NDArray[np.float64]:
         """Put ask prices."""
-        return self.strikedata.values("put_ask")
+        return self.strikedata.values(("put", "ask"))
 
     @property
     def volume(self) -> NDArray[np.float64] | None:
         """Per-strike traded volume, or None."""
-        return self.strikedata.get_values("volume")
+        return self.strikedata.get_values(("meta", "volume"))
 
     @property
     def open_interest(self) -> NDArray[np.float64] | None:
         """Per-strike open interest, or None."""
-        return self.strikedata.get_values("open_interest")
+        return self.strikedata.get_values(("meta", "open_interest"))
 
     @property
     def call_mid(self) -> NDArray[np.float64]:
@@ -349,12 +349,12 @@ class OptionChain:
 
         sa = StrikeArray()
         idx = pd.Index(strikes_out, dtype=np.float64)
-        sa.set("y_bid", pd.Series(bid_out, index=idx))
-        sa.set("y_ask", pd.Series(ask_out, index=idx))
+        sa.set(("y", "bid"), pd.Series(bid_out, index=idx))
+        sa.set(("y", "ask"), pd.Series(ask_out, index=idx))
         if self.volume is not None:
-            sa.set("volume", pd.Series(self.volume[valid], index=idx))
+            sa.set(("meta", "volume"), pd.Series(self.volume[valid], index=idx))
         if self.open_interest is not None:
-            sa.set("open_interest", pd.Series(self.open_interest[valid], index=idx))
+            sa.set(("meta", "open_interest"), pd.Series(self.open_interest[valid], index=idx))
 
         return SmileData(
             strikearray=sa,

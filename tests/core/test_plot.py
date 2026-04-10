@@ -18,8 +18,8 @@ def _make_sa(strikes, y_bid, y_ask):
     """Build a StrikeArray from parallel arrays."""
     sa = StrikeArray()
     idx = pd.Index(np.asarray(strikes, dtype=np.float64), dtype=np.float64)
-    sa.set("y_bid", pd.Series(np.asarray(y_bid, dtype=np.float64), index=idx))
-    sa.set("y_ask", pd.Series(np.asarray(y_ask, dtype=np.float64), index=idx))
+    sa.set(("y", "bid"), pd.Series(np.asarray(y_bid, dtype=np.float64), index=idx))
+    sa.set(("y", "ask"), pd.Series(np.asarray(y_ask, dtype=np.float64), index=idx))
     return sa
 
 
@@ -99,10 +99,10 @@ class TestPricesPlot:
 
         sa = StrikeArray()
         idx = pd.Index(strikes, dtype=np.float64)
-        sa.set("call_bid", pd.Series(call_mid - 0.1, index=idx))
-        sa.set("call_ask", pd.Series(call_mid + 0.1, index=idx))
-        sa.set("put_bid", pd.Series(put_mid - 0.1, index=idx))
-        sa.set("put_ask", pd.Series(put_mid + 0.1, index=idx))
+        sa.set(("call", "bid"), pd.Series(call_mid - 0.1, index=idx))
+        sa.set(("call", "ask"), pd.Series(call_mid + 0.1, index=idx))
+        sa.set(("put", "bid"), pd.Series(put_mid - 0.1, index=idx))
+        sa.set(("put", "ask"), pd.Series(put_mid + 0.1, index=idx))
         chain = OptionChain(
             strikedata=sa,
             metadata=SmileMetadata(

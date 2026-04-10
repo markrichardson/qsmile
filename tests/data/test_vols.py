@@ -23,12 +23,12 @@ def _make_sa(
     """Build a StrikeArray from parallel arrays."""
     sa = StrikeArray()
     idx = pd.Index(np.asarray(strikes, dtype=np.float64), dtype=np.float64)
-    sa.set("y_bid", pd.Series(np.asarray(y_bid, dtype=np.float64), index=idx))
-    sa.set("y_ask", pd.Series(np.asarray(y_ask, dtype=np.float64), index=idx))
+    sa.set(("y", "bid"), pd.Series(np.asarray(y_bid, dtype=np.float64), index=idx))
+    sa.set(("y", "ask"), pd.Series(np.asarray(y_ask, dtype=np.float64), index=idx))
     if volume is not None:
-        sa.set("volume", pd.Series(np.asarray(volume, dtype=np.float64), index=idx))
+        sa.set(("meta", "volume"), pd.Series(np.asarray(volume, dtype=np.float64), index=idx))
     if open_interest is not None:
-        sa.set("open_interest", pd.Series(np.asarray(open_interest, dtype=np.float64), index=idx))
+        sa.set(("meta", "open_interest"), pd.Series(np.asarray(open_interest, dtype=np.float64), index=idx))
     return sa
 
 

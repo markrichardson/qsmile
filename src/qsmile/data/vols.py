@@ -55,8 +55,8 @@ class SmileData:
             msg = f"at least 3 data points required, got {n}"
             raise ValueError(msg)
 
-        y_bid = sa.get_values("y_bid")
-        y_ask = sa.get_values("y_ask")
+        y_bid = sa.get_values(("y", "bid"))
+        y_ask = sa.get_values(("y", "ask"))
 
         if y_bid is not None and y_ask is not None and np.any(y_bid > y_ask):
             msg = "y_bid must not exceed y_ask"
@@ -68,16 +68,16 @@ class SmileData:
             raise ValueError(msg)
 
         if self.y_coord in (YCoord.Volatility, YCoord.Variance, YCoord.TotalVariance):
-            for attr in ("y_bid", "y_ask"):
-                arr = sa.get_values(attr)
+            for key in (("y", "bid"), ("y", "ask")):
+                arr = sa.get_values(key)
                 if arr is not None and np.any(arr < 0):
                     msg = f"y values must be non-negative for {self.y_coord.name}"
                     raise ValueError(msg)
 
-        for attr in ("volume", "open_interest"):
-            arr = sa.get_values(attr)
+        for key in (("meta", "volume"), ("meta", "open_interest")):
+            arr = sa.get_values(key)
             if arr is not None and np.any(arr < 0):
-                msg = f"{attr} must be non-negative"
+                msg = f"{key[1]} must be non-negative"
                 raise ValueError(msg)
 
     # ── convenience accessors ─────────────────────────────────────
@@ -90,22 +90,22 @@ class SmileData:
     @property
     def y_bid(self) -> NDArray[np.float64]:
         """Y-coordinate bid values."""
-        return self.strikearray.values("y_bid")
+        return self.strikearray.values(("y", "bid"))
 
     @property
     def y_ask(self) -> NDArray[np.float64]:
         """Y-coordinate ask values."""
-        return self.strikearray.values("y_ask")
+        return self.strikearray.values(("y", "ask"))
 
     @property
     def volume(self) -> NDArray[np.float64] | None:
         """Per-point traded volume, or None."""
-        return self.strikearray.get_values("volume")
+        return self.strikearray.get_values(("meta", "volume"))
 
     @property
     def open_interest(self) -> NDArray[np.float64] | None:
         """Per-point open interest, or None."""
-        return self.strikearray.get_values("open_interest")
+        return self.strikearray.get_values(("meta", "open_interest"))
 
     @property
     def y_mid(self) -> NDArray[np.float64]:
@@ -148,15 +148,15 @@ class SmileData:
 
         new_sa = StrikeArray()
         new_idx = pd.Index(new_x, dtype=np.float64)
-        new_sa.set("y_bid", pd.Series(new_y_bid, index=new_idx))
-        new_sa.set("y_ask", pd.Series(new_y_ask, index=new_idx))
+        new_sa.set(("y", "bid"), pd.Series(new_y_bid, index=new_idx))
+        new_sa.set(("y", "ask"), pd.Series(new_y_ask, index=new_idx))
 
         vol = self.volume
         if vol is not None:
-            new_sa.set("volume", pd.Series(vol.copy(), index=new_idx))
+            new_sa.set(("meta", "volume"), pd.Series(vol.copy(), index=new_idx))
         oi = self.open_interest
         if oi is not None:
-            new_sa.set("open_interest", pd.Series(oi.copy(), index=new_idx))
+            new_sa.set(("meta", "open_interest"), pd.Series(oi.copy(), index=new_idx))
 
         return SmileData(
             strikearray=new_sa,
@@ -197,8 +197,8 @@ class SmileData:
 
         sa = StrikeArray()
         idx = pd.Index(strikes, dtype=np.float64)
-        sa.set("y_bid", pd.Series(ivs, index=idx))
-        sa.set("y_ask", pd.Series(ivs.copy(), index=idx))
+        sa.set(("y", "bid"), pd.Series(ivs, index=idx))
+        sa.set(("y", "ask"), pd.Series(ivs.copy(), index=idx))
 
         return cls(
             strikearray=sa,

@@ -26,14 +26,14 @@ def _make_sd(
     """Build a StrikeArray from parallel arrays."""
     idx = pd.Index(np.asarray(strikes, dtype=np.float64), dtype=np.float64)
     sa = StrikeArray()
-    sa.set("call_bid", pd.Series(np.asarray(call_bid, dtype=np.float64), index=idx))
-    sa.set("call_ask", pd.Series(np.asarray(call_ask, dtype=np.float64), index=idx))
-    sa.set("put_bid", pd.Series(np.asarray(put_bid, dtype=np.float64), index=idx))
-    sa.set("put_ask", pd.Series(np.asarray(put_ask, dtype=np.float64), index=idx))
+    sa.set(("call", "bid"), pd.Series(np.asarray(call_bid, dtype=np.float64), index=idx))
+    sa.set(("call", "ask"), pd.Series(np.asarray(call_ask, dtype=np.float64), index=idx))
+    sa.set(("put", "bid"), pd.Series(np.asarray(put_bid, dtype=np.float64), index=idx))
+    sa.set(("put", "ask"), pd.Series(np.asarray(put_ask, dtype=np.float64), index=idx))
     if volume is not None:
-        sa.set("volume", pd.Series(np.asarray(volume, dtype=np.float64), index=idx))
+        sa.set(("meta", "volume"), pd.Series(np.asarray(volume, dtype=np.float64), index=idx))
     if open_interest is not None:
-        sa.set("open_interest", pd.Series(np.asarray(open_interest, dtype=np.float64), index=idx))
+        sa.set(("meta", "open_interest"), pd.Series(np.asarray(open_interest, dtype=np.float64), index=idx))
     return sa
 
 
