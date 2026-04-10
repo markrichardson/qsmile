@@ -29,8 +29,9 @@ class SABRModel(AbstractSmileModel):
     Fitted parameters (included in the parameter vector):
         alpha, beta, rho, nu
 
-    Context fields (NOT included in the parameter vector):
-        expiry, forward
+    Context (provided via ``metadata``):
+        expiry and forward are read from ``metadata.texpiry``
+        and ``metadata.forward``.
 
     Parameters
     ----------
@@ -42,18 +43,14 @@ class SABRModel(AbstractSmileModel):
         Correlation between forward and vol. Must be in (-1, 1).
     nu : float
         Vol-of-vol. Must be >= 0.
-    expiry : float
-        Time to expiry in years. Must be > 0.
-    forward : float
-        Forward price. Must be > 0.
+    metadata : SmileMetadata
+        Market context containing expiry, forward, etc.
     """
 
     alpha: float
     beta: float
     rho: float
     nu: float
-    expiry: float
-    forward: float
 
     # -- Class-level model metadata --
 
@@ -67,6 +64,7 @@ class SABRModel(AbstractSmileModel):
 
     def __post_init__(self) -> None:
         """Validate SABR parameter constraints."""
+        super().__post_init__()
         if self.alpha <= 0:
             msg = f"alpha must be positive, got {self.alpha}"
             raise ValueError(msg)
@@ -78,12 +76,6 @@ class SABRModel(AbstractSmileModel):
             raise ValueError(msg)
         if self.nu < 0:
             msg = f"nu must be non-negative, got {self.nu}"
-            raise ValueError(msg)
-        if self.expiry <= 0:
-            msg = f"expiry must be positive, got {self.expiry}"
-            raise ValueError(msg)
-        if self.forward <= 0:
-            msg = f"forward must be positive, got {self.forward}"
             raise ValueError(msg)
 
     def evaluate(self, x: ArrayLike) -> NDArray[np.float64] | np.float64:
@@ -100,8 +92,10 @@ class SABRModel(AbstractSmileModel):
             Implied volatility (lognormal).
         """
         k = np.asarray(x, dtype=np.float64)
-        strikes = self.forward * np.exp(k)
-        return self._hagan_implied_vol(self.forward, strikes, self.expiry, self.alpha, self.beta, self.rho, self.nu)
+        forward = self.metadata.forward
+        expiry = self.metadata.texpiry
+        strikes = forward * np.exp(k)
+        return self._hagan_implied_vol(forward, strikes, expiry, self.alpha, self.beta, self.rho, self.nu)
 
     @staticmethod
     def _hagan_implied_vol(

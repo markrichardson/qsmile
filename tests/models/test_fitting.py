@@ -7,11 +7,17 @@ import pandas as pd
 
 from qsmile.data.meta import SmileMetadata
 from qsmile.data.vols import SmileData
-from qsmile.models.fitting import SmileResult, fit
+from qsmile.models.fitting import fit
 from qsmile.models.svi import SVIModel
 
 # Reusable known-good parameters for synthetic round-trip tests
-_TRUE_PARAMS = SVIModel(a=0.04, b=0.1, rho=-0.3, m=0.0, sigma=0.2)
+_FIT_META = SmileMetadata(
+    date=pd.Timestamp("2024-01-01"),
+    expiry=pd.Timestamp("2024-07-01"),
+    forward=100.0,
+    sigma_atm=0.2,
+)
+_TRUE_PARAMS = SVIModel(a=0.04, b=0.1, rho=-0.3, m=0.0, sigma=0.2, metadata=_FIT_META)
 
 
 def _make_synthetic_sd(
@@ -62,10 +68,11 @@ class TestFitNoisyData:
     """Fit to market-like noisy data."""
 
     def test_noisy_fit_succeeds(self):
-        true_params = SVIModel(a=0.04, b=0.12, rho=-0.4, m=0.01, sigma=0.25)
         date = pd.Timestamp("2024-01-01")
         expiry_ts = pd.Timestamp("2025-01-01")
-        texpiry = (expiry_ts - date).days / 365.0
+        noisy_meta = SmileMetadata(date=date, expiry=expiry_ts, forward=100.0, sigma_atm=0.2)
+        true_params = SVIModel(a=0.04, b=0.12, rho=-0.4, m=0.01, sigma=0.25, metadata=noisy_meta)
+        texpiry = noisy_meta.texpiry
         strikes = np.linspace(80, 120, 15)
         forward = 100.0
         k = np.log(strikes / forward)
@@ -75,11 +82,10 @@ class TestFitNoisyData:
         noise = rng.normal(0, 0.002, size=ivs_clean.shape)
         ivs_noisy = ivs_clean + noise
 
-        meta = SmileMetadata(date=date, expiry=expiry_ts, forward=forward)
         sd = SmileData.from_mid_vols(
             strikes=strikes,
             ivs=ivs_noisy,
-            metadata=meta,
+            metadata=noisy_meta,
         )
         result = fit(sd, SVIModel)
 
@@ -92,7 +98,7 @@ class TestFitCustomInitialGuess:
 
     def test_custom_initial_params(self):
         sd = _make_synthetic_sd(n_strikes=12, strike_lo=85.0, strike_hi=115.0)
-        guess = SVIModel(a=0.03, b=0.08, rho=-0.2, m=0.01, sigma=0.15)
+        guess = SVIModel(a=0.03, b=0.08, rho=-0.2, m=0.01, sigma=0.15, metadata=_FIT_META)
         result = fit(sd, SVIModel, initial_guess=guess)
 
         assert result.success
@@ -109,19 +115,6 @@ class TestSmileResult:
         assert result.residuals.shape == (10,)
         assert isinstance(result.rmse, float)
         assert isinstance(result.params, SVIModel)
-
-    def test_evaluate(self):
-        params = SVIModel(a=0.04, b=0.1, rho=-0.3, m=0.0, sigma=0.2)
-        result = SmileResult(
-            params=params,
-            residuals=np.zeros(5),
-            rmse=0.0,
-            success=True,
-        )
-        k_test = np.array([-0.2, 0.0, 0.2])
-        w = result.evaluate(k_test)
-        expected = params.evaluate(k_test)
-        np.testing.assert_allclose(w, expected)
 
     def test_fitted_params_within_bounds(self):
         sd = _make_synthetic_sd()

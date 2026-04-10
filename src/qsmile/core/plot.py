@@ -85,3 +85,62 @@ def plot_bid_ask(
     ax.grid(True, alpha=0.3)
 
     return fig
+
+
+def plot_line(
+    x,
+    y,
+    *,
+    xlabel: str = "",
+    ylabel: str = "",
+    title: str = "",
+    label: str | None = None,
+    color: str | None = None,
+    ax=None,
+) -> matplotlib.figure.Figure:
+    """Plot a single curve.
+
+    Parameters
+    ----------
+    x : array-like
+        X-axis values.
+    y : array-like
+        Y-axis values.
+    xlabel, ylabel, title : str
+        Axis labels and title.
+    label : str, optional
+        Legend label.
+    color : str, optional
+        Color for the line.
+    ax : matplotlib Axes, optional
+        Axes to plot on. If None, creates a new figure.
+
+    Returns:
+    -------
+    matplotlib.figure.Figure
+    """
+    _require_matplotlib()
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    x = np.asarray(x)
+    y = np.asarray(y)
+
+    if ax is None:
+        fig, ax = plt.subplots()
+    else:
+        fig = ax.get_figure()
+
+    ax.plot(x, y, label=label, color=color)
+
+    if xlabel:
+        ax.set_xlabel(xlabel)
+    if ylabel:
+        ax.set_ylabel(ylabel)
+    if title:
+        ax.set_title(title)
+    if label:
+        ax.legend()
+    ax.grid(True, alpha=0.3)
+
+    return fig

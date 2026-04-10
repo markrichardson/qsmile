@@ -61,6 +61,7 @@ class SVIModel(AbstractSmileModel):
 
     def __post_init__(self) -> None:
         """Validate SVI parameter constraints."""
+        super().__post_init__()
         if self.b < 0:
             msg = f"b must be non-negative, got {self.b}"
             raise ValueError(msg)
