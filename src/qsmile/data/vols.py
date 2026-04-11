@@ -222,5 +222,6 @@ class SmileData:
             xlabel=self.x_coord.name,
             ylabel=self.y_coord.name,
             title=title,
+            fmt="none",
             ax=ax,
         )

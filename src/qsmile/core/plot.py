@@ -28,6 +28,7 @@ def plot_bid_ask(
     title: str = "",
     label: str | None = None,
     color: str | None = None,
+    fmt: str = "none",
     ax=None,
 ) -> matplotlib.figure.Figure:
     """Plot bid/ask as error bars around mid values.
@@ -72,7 +73,7 @@ def plot_bid_ask(
     yerr_lower = mid - lower
     yerr_upper = upper - mid
 
-    ax.errorbar(x, mid, yerr=[yerr_lower, yerr_upper], fmt="o-", capsize=3, label=label, color=color)
+    ax.errorbar(x, mid, yerr=[yerr_lower, yerr_upper], fmt=fmt, capsize=3, label=label, color=color)
 
     if xlabel:
         ax.set_xlabel(xlabel)

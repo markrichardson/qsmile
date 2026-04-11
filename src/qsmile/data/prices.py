@@ -501,6 +501,7 @@ class OptionChain:
             self.call_ask,
             label="Calls",
             color="tab:blue",
+            fmt="none",
             ax=ax,
         )
         plot_bid_ask(
@@ -510,6 +511,7 @@ class OptionChain:
             self.put_ask,
             label="Puts",
             color="tab:red",
+            fmt="none",
             ax=ax,
         )
         ax.set_xlabel("Strike")
