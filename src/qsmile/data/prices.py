@@ -165,7 +165,7 @@ def delta_blend_ivols(
     return blended_bid, blended_ask
 
 
-@dataclass
+@dataclass(repr=False)
 class OptionChain:
     """Bid/ask option price chain for a single expiry.
 
@@ -230,6 +230,15 @@ class OptionChain:
                 forward=meta.forward if meta.forward is not None else f_cal,
                 discount_factor=meta.discount_factor if meta.discount_factor is not None else d_cal,
             )
+
+    def __repr__(self) -> str:
+        """Compact repr with date, expiry, forward, and discount factor."""
+        m = self.metadata
+        date = m.date.strftime("%Y-%m-%d")
+        expiry = m.expiry.strftime("%Y-%m-%d")
+        fwd = f"{m.forward:.2f}" if m.forward is not None else "None"
+        df = f"{m.discount_factor:.2f}" if m.discount_factor is not None else "None"
+        return f"OptionChain(date={date}, expiry={expiry}, forward={fwd}, discount_factor={df})"
 
     # ── convenience accessors ─────────────────────────────────────
 

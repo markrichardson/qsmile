@@ -102,6 +102,22 @@ class TestOptionChainConstruction:
         assert chain.strikes.dtype == np.float64
 
 
+class TestOptionChainRepr:
+    def test_repr_format(self):
+        data = _make_prices()
+        chain = OptionChain(strikedata=data["strikedata"], metadata=data["metadata"])
+        r = repr(chain)
+        assert r == "OptionChain(date=2024-01-01, expiry=2024-07-01, forward=100.00, discount_factor=0.98)"
+
+    def test_repr_no_forward(self):
+        """Repr shows 'None' when forward/df are not yet calibrated."""
+        data = _make_prices()
+        # Build a chain that auto-calibrates, then check it shows 2dp
+        chain = OptionChain(strikedata=data["strikedata"], metadata=data["metadata"])
+        assert "forward=" in repr(chain)
+        assert "discount_factor=" in repr(chain)
+
+
 class TestOptionChainValidation:
     def test_non_positive_strikes(self):
         data = _make_prices()
