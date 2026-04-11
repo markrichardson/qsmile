@@ -207,7 +207,7 @@ class SmileData:
             metadata=meta,
         )
 
-    def plot(self, *, title: str = "Smile Data") -> matplotlib.figure.Figure:
+    def plot(self, *, title: str = "Smile Data", ax=None) -> matplotlib.figure.Figure:
         """Plot bid/ask Y-values as error bars vs X.
 
         Axis labels are derived from coordinate names.
@@ -222,4 +222,5 @@ class SmileData:
             xlabel=self.x_coord.name,
             ylabel=self.y_coord.name,
             title=title,
+            ax=ax,
         )

@@ -85,6 +85,14 @@ class TestSmileDataPlot:
         assert ax.get_xlabel() == "StandardisedStrike"
         assert ax.get_ylabel() == "TotalVariance"
 
+    def test_plot_on_existing_axes(self, sample_vol_smile):
+        import matplotlib.pyplot as plt
+
+        fig, ax = plt.subplots()
+        result = sample_vol_smile.plot(ax=ax)
+        assert result is fig
+        assert ax.get_ylabel() == "Volatility"
+
 
 class TestPricesPlot:
     def test_returns_figure(self):
@@ -113,6 +121,36 @@ class TestPricesPlot:
 
         fig = chain.plot()
         assert isinstance(fig, matplotlib.figure.Figure)
+
+    def test_plot_on_existing_axes(self):
+        from qsmile.core.black76 import black76_call, black76_put
+        from qsmile.data.meta import SmileMetadata
+        from qsmile.data.prices import OptionChain
+
+        strikes = np.array([90.0, 100.0, 110.0])
+        F, D, vol, T = 100.0, 1.0, 0.2, 0.5
+        call_mid = np.array([float(black76_call(F, K, D, vol, T)) for K in strikes])
+        put_mid = np.array([float(black76_put(F, K, D, vol, T)) for K in strikes])
+
+        sa = StrikeArray()
+        idx = pd.Index(strikes, dtype=np.float64)
+        sa.set(("call", "bid"), pd.Series(call_mid - 0.1, index=idx))
+        sa.set(("call", "ask"), pd.Series(call_mid + 0.1, index=idx))
+        sa.set(("put", "bid"), pd.Series(put_mid - 0.1, index=idx))
+        sa.set(("put", "ask"), pd.Series(put_mid + 0.1, index=idx))
+        chain = OptionChain(
+            strikedata=sa,
+            metadata=SmileMetadata(
+                date=pd.Timestamp("2024-01-01"), expiry=pd.Timestamp("2024-07-01"), forward=F, discount_factor=D
+            ),
+        )
+        import matplotlib.pyplot as plt
+
+        fig, ax = plt.subplots()
+        result = chain.plot(ax=ax)
+        assert result is fig
+        assert ax.get_xlabel() == "Strike"
+        assert ax.get_ylabel() == "Price"
 
 
 class TestMatplotlibMissing:
