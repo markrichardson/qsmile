@@ -6,6 +6,7 @@ from qsmile.core.black76 import black76_call, black76_implied_vol, black76_put
 from qsmile.core.coords import XCoord, YCoord
 from qsmile.core.daycount import DayCount
 from qsmile.data.meta import SmileMetadata
+from qsmile.data.parquet import SampleDataReader
 from qsmile.data.prices import OptionChain, delta_blend_ivols
 from qsmile.data.strikes import StrikeArray
 from qsmile.data.vols import SmileData
@@ -21,6 +22,7 @@ __all__ = [
     "OptionChain",
     "SABRModel",
     "SVIModel",
+    "SampleDataReader",
     "SmileData",
     "SmileMetadata",
     "SmileModel",
