@@ -12,7 +12,7 @@ from numpy.typing import ArrayLike, NDArray
 
 from qsmile.core.coords import XCoord, YCoord
 from qsmile.data.meta import SmileMetadata
-from qsmile.models.protocol import SmileModel
+from qsmile.models.base import SmileModel
 
 _META = SmileMetadata(
     date=pd.Timestamp("2024-01-01"),

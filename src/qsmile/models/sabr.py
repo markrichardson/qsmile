@@ -9,7 +9,7 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 from qsmile.core.coords import XCoord, YCoord
-from qsmile.models.protocol import SmileModel
+from qsmile.models.base import SmileModel
 
 
 @dataclass

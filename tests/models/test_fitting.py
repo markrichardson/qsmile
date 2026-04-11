@@ -8,7 +8,7 @@ import pandas as pd
 from qsmile.core.coords import XCoord, YCoord
 from qsmile.data.meta import SmileMetadata
 from qsmile.data.vols import SmileData
-from qsmile.models.fitting import fit
+from qsmile.models.result import fit
 from qsmile.models.svi import SVIModel
 
 # Reusable known-good parameters for synthetic round-trip tests

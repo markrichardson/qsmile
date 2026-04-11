@@ -8,7 +8,7 @@ import pytest
 
 from qsmile.data.meta import SmileMetadata
 from qsmile.data.vols import SmileData
-from qsmile.models.fitting import SmileResult, fit
+from qsmile.models.result import SmileResult, fit
 from qsmile.models.sabr import SABRModel
 
 # Known-good SABR parameters for synthetic round-trip tests

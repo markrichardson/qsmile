@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from qsmile.data.parquet import SampleDataReader
+from qsmile.data.io import SampleDataReader
 from qsmile.data.prices import OptionChain
 
 # ── helpers ───────────────────────────────────────────────────────────

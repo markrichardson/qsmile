@@ -10,7 +10,7 @@ from scipy.optimize import least_squares
 
 from qsmile.data.meta import SmileMetadata
 from qsmile.data.vols import SmileData
-from qsmile.models.protocol import SmileModel
+from qsmile.models.base import SmileModel
 
 
 @dataclass

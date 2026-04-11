@@ -8,7 +8,7 @@ import pytest
 
 from qsmile.core.coords import XCoord, YCoord
 from qsmile.data.meta import SmileMetadata
-from qsmile.models.protocol import SmileModel
+from qsmile.models.base import SmileModel
 from qsmile.models.sabr import SABRModel
 
 # -- Reusable fixtures --
