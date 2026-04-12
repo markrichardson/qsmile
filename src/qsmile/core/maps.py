@@ -85,7 +85,7 @@ def _vol_to_variance(y: NDArray[np.float64], x: NDArray[np.float64], meta: Smile
 
 
 def _variance_to_vol(y: NDArray[np.float64], x: NDArray[np.float64], meta: SmileMetadata) -> NDArray[np.float64]:
-    return np.sqrt(y)
+    return np.sqrt(np.maximum(y, 0.0))
 
 
 def _variance_to_total_variance(
