@@ -27,10 +27,10 @@ with app.setup:
 
 @app.cell
 def _():
-    from qsmile import SABRModel, SampleDataReader, XCoord, YCoord, fit
+    from qsmile import SampleDataReader, SVIModel, XCoord, YCoord, fit
 
     reader = SampleDataReader()
-    return SABRModel, XCoord, YCoord, fit, reader
+    return SVIModel, XCoord, YCoord, fit, reader
 
 
 @app.cell
@@ -68,9 +68,9 @@ def _(fixed_strike_vols):
 
 
 @app.cell
-def _(SABRModel, fit, fixed_strike_vols):
+def _(SVIModel, fit, fixed_strike_vols):
     # fixed_strike_vols = chain.filter().to_smile_data()
-    result = fit(fixed_strike_vols, model=SABRModel)
+    result = fit(fixed_strike_vols, model=SVIModel)
     return (result,)
 
 

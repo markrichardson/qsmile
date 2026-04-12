@@ -125,6 +125,7 @@ class SmileModel(ABC):
         n_points: int = 200,
         std_range: tuple[float, float] = (-5.0, 2.0),
         ax=None,
+        **kwargs,
     ) -> matplotlib.figure.Figure:
         """Plot the model curve in current coordinates.
 
@@ -152,4 +153,5 @@ class SmileModel(ABC):
             ylabel=self.current_y_coord.name,
             title=title,
             ax=ax,
+            **kwargs,
         )

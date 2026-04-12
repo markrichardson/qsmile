@@ -488,7 +488,7 @@ class OptionChain:
             ),
         )
 
-    def plot(self, *, title: str = "Option Chain Prices", ax=None) -> matplotlib.figure.Figure:
+    def plot(self, *, title: str = "Option Chain Prices", ax=None, **kwargs) -> matplotlib.figure.Figure:
         """Plot bid/ask prices as error bars for calls and puts."""
         from qsmile.core.plot import _require_matplotlib, plot_bid_ask
 
@@ -506,6 +506,7 @@ class OptionChain:
             color="tab:blue",
             fmt="none",
             ax=ax,
+            **kwargs,
         )
         plot_bid_ask(
             self.strikes,
@@ -516,6 +517,7 @@ class OptionChain:
             color="tab:red",
             fmt="none",
             ax=ax,
+            **kwargs,
         )
         ax.set_xlabel("Strike")
         ax.set_ylabel("Price")

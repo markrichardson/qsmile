@@ -30,6 +30,7 @@ def plot_bid_ask(
     color: str | None = None,
     fmt: str = "none",
     ax=None,
+    **kwargs,
 ) -> matplotlib.figure.Figure:
     """Plot bid/ask as error bars around mid values.
 
@@ -73,7 +74,7 @@ def plot_bid_ask(
     yerr_lower = mid - lower
     yerr_upper = upper - mid
 
-    ax.errorbar(x, mid, yerr=[yerr_lower, yerr_upper], fmt=fmt, capsize=3, label=label, color=color)
+    ax.errorbar(x, mid, yerr=[yerr_lower, yerr_upper], fmt=fmt, capsize=3, label=label, color=color, **kwargs)
 
     if xlabel:
         ax.set_xlabel(xlabel)
@@ -98,6 +99,7 @@ def plot_line(
     label: str | None = None,
     color: str | None = None,
     ax=None,
+    **kwargs,
 ) -> matplotlib.figure.Figure:
     """Plot a single curve.
 
@@ -132,7 +134,7 @@ def plot_line(
     else:
         fig = ax.get_figure()
 
-    ax.plot(x, y, label=label, color=color)
+    ax.plot(x, y, label=label, color=color, **kwargs)
 
     if xlabel:
         ax.set_xlabel(xlabel)
