@@ -523,4 +523,8 @@ class OptionChain:
         ax.set_ylabel("Price")
         ax.set_title(title)
         ax.legend()
-        return ax.get_figure()
+        fig = ax.get_figure()
+        if not isinstance(fig, plt.Figure):
+            msg = "Expected a matplotlib Figure from ax.get_figure()"
+            raise TypeError(msg)
+        return fig

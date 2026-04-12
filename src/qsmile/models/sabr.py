@@ -93,6 +93,9 @@ class SABRModel(SmileModel):
         """
         k = np.asarray(x, dtype=np.float64)
         forward = self.metadata.forward
+        if forward is None:
+            msg = "forward must be set in metadata before evaluating SABR"
+            raise ValueError(msg)
         expiry = self.metadata.texpiry
         strikes = forward * np.exp(k)
         return self._hagan_implied_vol(forward, strikes, expiry, self.alpha, self.beta, self.rho, self.nu)
