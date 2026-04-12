@@ -123,20 +123,25 @@ class SmileModel(ABC):
         *,
         title: str = "Smile Model",
         n_points: int = 200,
+        std_range: tuple[float, float] = (-5.0, 2.0),
         ax=None,
     ) -> matplotlib.figure.Figure:
-        """Plot the model curve in current coordinates."""
+        """Plot the model curve in current coordinates.
+
+        Parameters
+        ----------
+        std_range : tuple[float, float]
+            Plot range in standardised-strike units (sigma * sqrt(T)) as (lo, hi).
+            Default (-5.0, 2.0).
+        """
         from qsmile.core.maps import apply_x_chain, compose_x_maps
         from qsmile.core.plot import plot_line
 
-        # Generate grid in current x-coords
-        compose_x_maps(self.current_x_coord, self.__class__.native_x_coord)
-        # Build native-space grid, then convert to current
-        native_lo, native_hi = -0.5, 0.5  # log-moneyness default range
-        native_grid = np.linspace(native_lo, native_hi, n_points)
+        # Build grid in standardised-strike space, then map to current coords
+        std_grid = np.linspace(std_range[0], std_range[1], n_points)
 
-        inv_chain = compose_x_maps(self.__class__.native_x_coord, self.current_x_coord)
-        x_grid = apply_x_chain(native_grid, inv_chain, self.metadata)
+        to_current = compose_x_maps(XCoord.StandardisedStrike, self.current_x_coord)
+        x_grid = apply_x_chain(std_grid, to_current, self.metadata)
 
         y_grid = np.asarray(self.evaluate(x_grid), dtype=np.float64)
 
