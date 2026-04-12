@@ -24,7 +24,7 @@ from qsmile.data.strikes import StrikeArray
 
 
 @dataclass
-class SmileData:
+class VolData:
     """Coordinate-labelled smile data with bid/ask.
 
     Parameters
@@ -112,7 +112,7 @@ class SmileData:
         """Midpoint of bid and ask Y values."""
         return (self.y_bid + self.y_ask) / 2.0
 
-    def transform(self, target_x: XCoord, target_y: YCoord) -> SmileData:
+    def transform(self, target_x: XCoord, target_y: YCoord) -> VolData:
         """Re-express data in target coordinate system.
 
         Parameters
@@ -124,8 +124,8 @@ class SmileData:
 
         Returns:
         -------
-        SmileData
-            New SmileData in the target coordinates.
+        VolData
+            New VolData in the target coordinates.
         """
         # Transform X
         x_chain = compose_x_maps(self.x_coord, target_x)
@@ -158,7 +158,7 @@ class SmileData:
         if oi is not None:
             new_sa.set(("meta", "open_interest"), pd.Series(oi.copy(), index=new_idx))
 
-        return SmileData(
+        return VolData(
             strikearray=new_sa,
             x_coord=target_x,
             y_coord=target_y,
@@ -171,7 +171,7 @@ class SmileData:
         strikes: NDArray[np.float64],
         ivs: NDArray[np.float64],
         metadata: SmileMetadata,
-    ) -> SmileData:
+    ) -> VolData:
         """Create from mid implied vols (setting y_bid = y_ask = ivs).
 
         Parameters

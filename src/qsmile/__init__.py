@@ -9,7 +9,7 @@ from qsmile.data.io import SampleDataReader
 from qsmile.data.meta import SmileMetadata
 from qsmile.data.prices import OptionChain, delta_blend_ivols
 from qsmile.data.strikes import StrikeArray
-from qsmile.data.vols import SmileData
+from qsmile.data.vols import VolData
 from qsmile.models.base import SmileModel
 from qsmile.models.result import SmileResult, fit
 from qsmile.models.sabr import SABRModel
@@ -23,11 +23,11 @@ __all__ = [
     "SABRModel",
     "SVIModel",
     "SampleDataReader",
-    "SmileData",
     "SmileMetadata",
     "SmileModel",
     "SmileResult",
     "StrikeArray",
+    "VolData",
     "XCoord",
     "YCoord",
     "black76_call",

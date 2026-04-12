@@ -9,7 +9,7 @@ from numpy.typing import NDArray
 from scipy.optimize import least_squares
 
 from qsmile.data.meta import SmileMetadata
-from qsmile.data.vols import SmileData
+from qsmile.data.vols import VolData
 from qsmile.models.base import SmileModel
 
 
@@ -49,7 +49,7 @@ def _residuals(
 
 
 def fit(
-    chain: SmileData,
+    chain: VolData,
     model: type[SmileModel],
     initial_guess: SmileModel | None = None,
 ) -> SmileResult:
@@ -57,7 +57,7 @@ def fit(
 
     Parameters
     ----------
-    chain : SmileData
+    chain : VolData
         Market data to fit. Uses mid values for fitting.
         Internally transforms to the model's native coordinates.
     model : type[SmileModel]

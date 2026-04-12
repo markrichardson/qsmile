@@ -11,7 +11,7 @@ import pytest
 from qsmile.core.coords import XCoord, YCoord
 from qsmile.data.meta import SmileMetadata
 from qsmile.data.strikes import StrikeArray
-from qsmile.data.vols import SmileData
+from qsmile.data.vols import VolData
 
 
 def _make_sa(strikes, y_bid, y_ask):
@@ -27,7 +27,7 @@ def _make_sa(strikes, y_bid, y_ask):
 def sample_vol_smile():
     """Create sample SmileData in (FixedStrike, Volatility) coords."""
     strikes = np.array([90.0, 100.0, 110.0])
-    return SmileData(
+    return VolData(
         strikearray=_make_sa(strikes, np.array([0.24, 0.19, 0.21]), np.array([0.26, 0.21, 0.23])),
         x_coord=XCoord.FixedStrike,
         y_coord=YCoord.Volatility,
@@ -45,7 +45,7 @@ def sample_vol_smile():
 def sample_unitised_smile():
     """Create sample SmileData in (StandardisedStrike, TotalVariance) coords."""
     k = np.array([-1.0, 0.0, 1.0])
-    return SmileData(
+    return VolData(
         strikearray=_make_sa(k, np.array([0.019, 0.018, 0.019]), np.array([0.021, 0.020, 0.021])),
         x_coord=XCoord.StandardisedStrike,
         y_coord=YCoord.TotalVariance,

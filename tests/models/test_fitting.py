@@ -7,7 +7,7 @@ import pandas as pd
 
 from qsmile.core.coords import XCoord, YCoord
 from qsmile.data.meta import SmileMetadata
-from qsmile.data.vols import SmileData
+from qsmile.data.vols import VolData
 from qsmile.models.result import fit
 from qsmile.models.svi import SVIModel
 
@@ -27,7 +27,7 @@ def _make_synthetic_sd(
     n_strikes: int = 20,
     strike_lo: float = 80.0,
     strike_hi: float = 120.0,
-) -> SmileData:
+) -> VolData:
     """Generate SmileData from known SVI parameters (noiseless)."""
     meta = SmileMetadata(
         date=pd.Timestamp("2024-01-01"),
@@ -37,7 +37,7 @@ def _make_synthetic_sd(
     strikes = np.linspace(strike_lo, strike_hi, n_strikes)
     k = np.log(strikes / forward)
     ivs = params.transform(XCoord.LogMoneynessStrike, YCoord.Volatility).evaluate(k)
-    return SmileData.from_mid_vols(strikes=strikes, ivs=ivs, metadata=meta)
+    return VolData.from_mid_vols(strikes=strikes, ivs=ivs, metadata=meta)
 
 
 class TestFitSyntheticRoundTrip:
@@ -81,7 +81,7 @@ class TestFitNoisyData:
         noise = rng.normal(0, 0.002, size=ivs_clean.shape)
         ivs_noisy = ivs_clean + noise
 
-        sd = SmileData.from_mid_vols(
+        sd = VolData.from_mid_vols(
             strikes=strikes,
             ivs=ivs_noisy,
             metadata=noisy_meta,

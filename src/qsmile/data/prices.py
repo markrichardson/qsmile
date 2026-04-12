@@ -17,7 +17,7 @@ from qsmile.data.strikes import StrikeArray
 if TYPE_CHECKING:
     import matplotlib.figure
 
-    from qsmile.data.vols import SmileData
+    from qsmile.data.vols import VolData
 
 
 def _calibrate_forward_df(
@@ -290,8 +290,8 @@ class OptionChain:
         """Midpoint of put bid and ask prices."""
         return (self.put_bid + self.put_ask) / 2.0
 
-    def to_smile_data(self) -> SmileData:
-        """Convert to a SmileData with (FixedStrike, Volatility) using delta-blended vols.
+    def to_vols(self) -> VolData:
+        """Convert to a VolData with (FixedStrike, Volatility) using delta-blended vols.
 
         Inverts both call and put prices to implied vols at every strike, then
         blends them using Black76 undiscounted call-delta weights. OTM options
@@ -301,11 +301,11 @@ class OptionChain:
         """
         from qsmile.core.black76 import black76_implied_vol
         from qsmile.core.coords import XCoord, YCoord
-        from qsmile.data.vols import SmileData
+        from qsmile.data.vols import VolData
 
         meta = self.metadata
         if meta.forward is None or meta.discount_factor is None:
-            msg = "forward and discount_factor must be calibrated before to_smile_data()"
+            msg = "forward and discount_factor must be calibrated before to_vols()"
             raise TypeError(msg)
 
         n = len(self.strikes)
@@ -368,7 +368,7 @@ class OptionChain:
         if self.open_interest is not None:
             sa.set(("meta", "open_interest"), pd.Series(self.open_interest[valid], index=idx))
 
-        return SmileData(
+        return VolData(
             strikearray=sa,
             x_coord=XCoord.FixedStrike,
             y_coord=YCoord.Volatility,

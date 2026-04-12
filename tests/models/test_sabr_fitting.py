@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 
 from qsmile.data.meta import SmileMetadata
-from qsmile.data.vols import SmileData
+from qsmile.data.vols import VolData
 from qsmile.models.result import SmileResult, fit
 from qsmile.models.sabr import SABRModel
 
@@ -24,7 +24,7 @@ def _make_synthetic_sabr_sd(
     n_strikes: int = 20,
     strike_lo: float = 80.0,
     strike_hi: float = 120.0,
-) -> SmileData:
+) -> VolData:
     """Generate SmileData from known SABR parameters (noiseless)."""
     strikes = np.linspace(strike_lo, strike_hi, n_strikes)
     k = np.log(strikes / params.metadata.forward)
@@ -32,7 +32,7 @@ def _make_synthetic_sabr_sd(
     # Ensure ivs is an array
     ivs = np.asarray(ivs, dtype=np.float64)
     meta = SmileMetadata(date=_DATE, expiry=_EXPIRY, forward=params.metadata.forward)
-    return SmileData.from_mid_vols(strikes=strikes, ivs=ivs, metadata=meta)
+    return VolData.from_mid_vols(strikes=strikes, ivs=ivs, metadata=meta)
 
 
 class TestFitSABRSyntheticRoundTrip:
@@ -74,7 +74,7 @@ class TestFitSABRNoisyData:
             0, 0.002, size=sd.x.shape
         )
         meta = SmileMetadata(date=_DATE, expiry=_EXPIRY, forward=_TRUE_PARAMS.metadata.forward)
-        sd_noisy = SmileData.from_mid_vols(
+        sd_noisy = VolData.from_mid_vols(
             strikes=sd.x,
             ivs=noisy_ivs,
             metadata=meta,

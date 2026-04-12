@@ -473,7 +473,7 @@ class TestToSmileDataBlended:
     def test_returns_vol_coordinates(self):
         data = _make_prices(vol=0.25, spread=0.005)
         chain = OptionChain(strikedata=data["strikedata"], metadata=data["metadata"])
-        sd = chain.to_smile_data()
+        sd = chain.to_vols()
         assert sd.x_coord == XCoord.FixedStrike
         assert sd.y_coord == YCoord.Volatility
 
@@ -481,20 +481,20 @@ class TestToSmileDataBlended:
         """With flat-vol Black76 prices, blended vols should recover the input vol."""
         data = _make_prices(vol=0.25, spread=0.005)
         chain = OptionChain(strikedata=data["strikedata"], metadata=data["metadata"])
-        sd = chain.to_smile_data()
+        sd = chain.to_vols()
         np.testing.assert_allclose(sd.y_mid, 0.25, atol=0.002)
 
     def test_sigma_atm_derived(self):
         data = _make_prices(vol=0.25, spread=0.005)
         chain = OptionChain(strikedata=data["strikedata"], metadata=data["metadata"])
-        sd = chain.to_smile_data()
+        sd = chain.to_vols()
         assert sd.metadata.sigma_atm is not None
         assert sd.metadata.sigma_atm == pytest.approx(0.25, abs=0.002)
 
     def test_metadata_populated(self):
         data = _make_prices(forward=100.0, discount_factor=0.98)
         chain = OptionChain(strikedata=data["strikedata"], metadata=data["metadata"])
-        sd = chain.to_smile_data()
+        sd = chain.to_vols()
         assert sd.metadata.forward == pytest.approx(100.0, rel=1e-3)
         assert sd.metadata.discount_factor == pytest.approx(0.98, rel=1e-2)
         assert sd.metadata.expiry == data["metadata"].expiry
@@ -502,7 +502,7 @@ class TestToSmileDataBlended:
     def test_bid_ask_preserved(self):
         data = _make_prices(vol=0.25, spread=0.01)
         chain = OptionChain(strikedata=data["strikedata"], metadata=data["metadata"])
-        sd = chain.to_smile_data()
+        sd = chain.to_vols()
         assert np.all(sd.y_ask >= sd.y_bid)
 
 
@@ -572,7 +572,7 @@ class TestInversionFailureFallback:
         """to_smile_data excludes strikes where neither vol is available."""
         data = _make_prices(vol=0.25, spread=0.005)
         chain = OptionChain(strikedata=data["strikedata"], metadata=data["metadata"])
-        sd = chain.to_smile_data()
+        sd = chain.to_vols()
         assert not np.any(np.isnan(sd.y_bid))
         assert not np.any(np.isnan(sd.y_ask))
         assert len(sd.x) == len(chain.strikes)
@@ -616,7 +616,7 @@ class TestOptionChainToSmileData:
                 discount_factor=discount_factor,
             ),
         )
-        sd = prices.to_smile_data()
+        sd = prices.to_vols()
         assert sd.x_coord == XCoord.FixedStrike
         assert sd.y_coord == YCoord.Volatility
         assert sd.metadata.forward == prices.metadata.forward
@@ -709,7 +709,7 @@ class TestVolumeOIPassthrough:
 
     def test_to_smile_data_passes_through(self):
         chain = self._chain_with_vol_oi()
-        sd = chain.to_smile_data()
+        sd = chain.to_vols()
         # blended may exclude some strikes, so length may differ
         assert sd.volume is not None
         assert sd.open_interest is not None
@@ -719,7 +719,7 @@ class TestVolumeOIPassthrough:
     def test_to_smile_data_none_passes_through(self):
         data = _make_prices()
         chain = OptionChain(strikedata=data["strikedata"], metadata=data["metadata"])
-        sd = chain.to_smile_data()
+        sd = chain.to_vols()
         assert sd.volume is None
         assert sd.open_interest is None
 
