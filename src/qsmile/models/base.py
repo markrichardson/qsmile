@@ -123,6 +123,7 @@ class SmileModel(ABC):
         *,
         title: str = "Smile Model",
         n_points: int = 200,
+        ax=None,
     ) -> matplotlib.figure.Figure:
         """Plot the model curve in current coordinates."""
         from qsmile.core.maps import apply_x_chain, compose_x_maps
@@ -145,4 +146,5 @@ class SmileModel(ABC):
             xlabel=self.current_x_coord.name,
             ylabel=self.current_y_coord.name,
             title=title,
+            ax=ax,
         )
