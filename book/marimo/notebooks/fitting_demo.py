@@ -56,7 +56,7 @@ def _(chain_clean):
 
 @app.cell
 def _(chain_clean):
-    fixed_strike_vols = chain_clean.to_smile_data()
+    fixed_strike_vols = chain_clean.to_vols()
     return (fixed_strike_vols,)
 
 
@@ -69,7 +69,7 @@ def _(fixed_strike_vols):
 
 @app.cell
 def _(SVIModel, fit, fixed_strike_vols):
-    # fixed_strike_vols = chain.filter().to_smile_data()
+    # fixed_strike_vols = chain.filter().to_vols()
     result = fit(fixed_strike_vols, model=SVIModel)
     return (result,)
 

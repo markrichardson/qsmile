@@ -56,7 +56,7 @@ def cell_intro():
         | # | Layer | Key classes / functions |
         |---|-------|------------------------|
         | 1 | **Option chain** | `OptionChain` — load, filter, calibrate $F$, $D$ |
-        | 2 | **SmileData** | `to_smile_data()`, coordinate transforms |
+        | 2 | **VolData** | `to_vols()`, coordinate transforms |
         | 3 | **Model fitting** | `fit(sd, SVIModel)`, `fit(sd, SABRModel)` |
         | 4 | **Ancillary** | volume / open interest passthrough |
         """
@@ -274,7 +274,7 @@ def cell_chain_plot(chain, chain_raw):
 
 @app.cell(hide_code=True)
 def cell_sd_intro():
-    """Introduce SmileData section."""
+    """Introduce VolData section."""
     _x_table = (
         "| X-coordinate | Formula |\n"
         "|-------------|---------|\n"
@@ -297,9 +297,9 @@ def cell_sd_intro():
     mo.md(
         r"""
         ---
-        ## 2 · SmileData & Coordinate Transforms
+        ## 2 · VolData & Coordinate Transforms
 
-        `.to_smile_data()` delta-blends call/put implied vols into
+        `.to_vols()` delta-blends call/put implied vols into
         **(FixedStrike, Volatility)** using Black-76 call-delta weights.
 
         From there, `.transform(x, y)` moves freely between any combination:
@@ -315,12 +315,12 @@ def cell_sd_intro():
 
 @app.cell(hide_code=True)
 def cell_smile_data(chain):
-    """Create SmileData in price and vol coordinates."""
-    sd_vols = chain.to_smile_data()
+    """Create VolData in price and vol coordinates."""
+    sd_vols = chain.to_vols()
 
     mo.md(
         f"""
-    ### SmileData containers
+    ### VolData containers
 
     | Container | X coord | Y coord | Points |
     |-----------|---------|---------|-------:|
@@ -678,8 +678,8 @@ def cell_vol_oi_intro():
 
         Optional `volume` and `open_interest` arrays flow through the
         entire pipeline — from `OptionChain` through `filter()`,
-        `to_smile_data()`, and
-        `SmileData.transform()`.
+        `to_vols()`, and
+        `VolData.transform()`.
         """
     )
     return
@@ -688,7 +688,7 @@ def cell_vol_oi_intro():
 @app.cell(hide_code=True)
 def cell_vol_oi_demo(chain):
     """Show volume / OI surviving the pipeline."""
-    sd_with_vol = chain.to_smile_data()
+    sd_with_vol = chain.to_vols()
     sd_transformed = sd_with_vol.transform(XCoord.LogMoneynessStrike, YCoord.TotalVariance)
 
     _fig = make_subplots(
@@ -739,7 +739,7 @@ def cell_vol_oi_demo(chain):
     | Pipeline stage | Volume? | OI? |
     |----------------|:-------:|:---:|
     | `OptionChain` (raw) | {_vol(chain)} | {_oi(chain)} |
-    | `to_smile_data()` | {_vol(sd_with_vol)} | {_oi(sd_with_vol)} |
+    | `to_vols()` | {_vol(sd_with_vol)} | {_oi(sd_with_vol)} |
     | `transform(LogMoneyness, TotalVar)` | {_vol(sd_transformed)} | {_oi(sd_transformed)} |
     """
             ),
@@ -761,7 +761,7 @@ def cell_summary():
         | Load | `OptionChain(...)` | Stores bid/ask prices |
         | Clean | `.filter()` | 5-filter arbitrage removal |
         | Calibrate | automatic | Forward $F$ and discount factor $D$ from put-call parity |
-        | Convert | `.to_smile_data()` | Delta-blended implied vols |
+        | Convert | `.to_vols()` | Delta-blended implied vols |
         | Transform | `.transform(x, y)` | Any $(X, Y)$ coordinate pair |
         | Fit | `fit(sd, SVIModel)` / `fit(sd, SABRModel)` | Parametric smile fit |
         | Ancillary | `volume`, `open_interest` | Optional data carried through pipeline |
