@@ -412,7 +412,7 @@ class TestDeltaBlendIvols:
         np.testing.assert_allclose(blended_ask[atm_idx], data["call_ask_ivols"][atm_idx], atol=1e-10)
 
     def test_deep_otm_call_uses_call_vol(self):
-        """Far below forward (deep ITM put wing), call vol dominates."""
+        """Far above forward (OTM call wing), call vol dominates."""
         call_vols = np.array([0.30, 0.25, 0.22, 0.20, 0.22, 0.25, 0.30])
         put_vols = np.array([0.35, 0.28, 0.23, 0.20, 0.23, 0.28, 0.35])
         strikes = np.array([60.0, 80.0, 90.0, 100.0, 110.0, 120.0, 140.0])
@@ -425,11 +425,11 @@ class TestDeltaBlendIvols:
             100.0,
             0.5,
         )
-        # At K=60 (deep below F), weight → 1, should be very close to call vol
-        assert blended_bid[0] == pytest.approx(call_vols[0], abs=0.01)
+        # At K=140 (deep above F, OTM call), should be very close to call vol
+        assert blended_bid[-1] == pytest.approx(call_vols[-1], abs=0.01)
 
     def test_deep_otm_put_uses_put_vol(self):
-        """Far above forward (deep OTM put wing), put vol dominates."""
+        """Far below forward (OTM put wing), put vol dominates."""
         call_vols = np.array([0.30, 0.25, 0.22, 0.20, 0.22, 0.25, 0.30])
         put_vols = np.array([0.35, 0.28, 0.23, 0.20, 0.23, 0.28, 0.35])
         strikes = np.array([60.0, 80.0, 90.0, 100.0, 110.0, 120.0, 140.0])
@@ -442,8 +442,8 @@ class TestDeltaBlendIvols:
             100.0,
             0.5,
         )
-        # At K=140 (deep above F), weight → 0, should be very close to put vol
-        assert blended_bid[-1] == pytest.approx(put_vols[-1], abs=0.01)
+        # At K=60 (deep below F, OTM put), should be very close to put vol
+        assert blended_bid[0] == pytest.approx(put_vols[0], abs=0.01)
 
     def test_weights_monotonically_decrease(self):
         """Delta weights should decrease monotonically with strike."""

@@ -141,13 +141,15 @@ def delta_blend_ivols(
     safe_sigma = np.where(safe_sigma <= 0, 1e-8, safe_sigma)
 
     d1 = (np.log(forward / strikes) + 0.5 * safe_sigma**2 * expiry) / (safe_sigma * sqrt_t)
-    w = norm.cdf(d1)
+    # w = 1 - Phi(d1): ≈ 0 at low strikes (OTM put region), ≈ 1 at high strikes (OTM call region)
+    # Used as the call weight so OTM options dominate in each wing.
+    w = 1.0 - norm.cdf(d1)
 
-    # Mask NaN vols: if call is NaN, force weight to 0 (use put); if put is NaN, force to 1 (use call)
+    # Mask NaN vols: if call is NaN, force w=0 (use put); if put is NaN, force w=1 (use call)
     call_available = ~np.isnan(call_bid_ivols)
     put_available = ~np.isnan(put_bid_ivols)
 
-    # Both missing → NaN
+    # Both missing -> NaN
     neither = ~call_available & ~put_available
     w = np.where(call_available & ~put_available, 1.0, w)
     w = np.where(~call_available & put_available, 0.0, w)
@@ -159,6 +161,7 @@ def delta_blend_ivols(
     pb = np.where(np.isnan(put_bid_ivols), 0.0, put_bid_ivols)
     pa = np.where(np.isnan(put_ask_ivols), 0.0, put_ask_ivols)
 
+    # w weights calls, (1-w) weights puts: OTM dominates in each wing
     blended_bid = w * cb + (1.0 - w) * pb
     blended_ask = w * ca + (1.0 - w) * pa
 
