@@ -9,11 +9,11 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 from qsmile.core.coords import XCoord, YCoord
-from qsmile.models.protocol import AbstractSmileModel
+from qsmile.models.base import SmileModel
 
 
 @dataclass
-class SABRModel(AbstractSmileModel):
+class SABRModel(SmileModel):
     """SABR model with Hagan (2002) lognormal implied volatility approximation.
 
     The SABR model describes the dynamics of a forward rate F and its
@@ -29,8 +29,9 @@ class SABRModel(AbstractSmileModel):
     Fitted parameters (included in the parameter vector):
         alpha, beta, rho, nu
 
-    Context fields (NOT included in the parameter vector):
-        expiry, forward
+    Context (provided via ``metadata``):
+        expiry and forward are read from ``metadata.texpiry``
+        and ``metadata.forward``.
 
     Parameters
     ----------
@@ -42,18 +43,14 @@ class SABRModel(AbstractSmileModel):
         Correlation between forward and vol. Must be in (-1, 1).
     nu : float
         Vol-of-vol. Must be >= 0.
-    expiry : float
-        Time to expiry in years. Must be > 0.
-    forward : float
-        Forward price. Must be > 0.
+    metadata : SmileMetadata
+        Market context containing expiry, forward, etc.
     """
 
     alpha: float
     beta: float
     rho: float
     nu: float
-    expiry: float
-    forward: float
 
     # -- Class-level model metadata --
 
@@ -67,6 +64,7 @@ class SABRModel(AbstractSmileModel):
 
     def __post_init__(self) -> None:
         """Validate SABR parameter constraints."""
+        super().__post_init__()
         if self.alpha <= 0:
             msg = f"alpha must be positive, got {self.alpha}"
             raise ValueError(msg)
@@ -79,14 +77,8 @@ class SABRModel(AbstractSmileModel):
         if self.nu < 0:
             msg = f"nu must be non-negative, got {self.nu}"
             raise ValueError(msg)
-        if self.expiry <= 0:
-            msg = f"expiry must be positive, got {self.expiry}"
-            raise ValueError(msg)
-        if self.forward <= 0:
-            msg = f"forward must be positive, got {self.forward}"
-            raise ValueError(msg)
 
-    def evaluate(self, x: ArrayLike) -> NDArray[np.float64] | np.float64:
+    def _evaluate(self, x: ArrayLike) -> NDArray[np.float64] | np.float64:
         """Compute Hagan (2002) lognormal implied volatility at log-moneyness values.
 
         Parameters
@@ -100,8 +92,13 @@ class SABRModel(AbstractSmileModel):
             Implied volatility (lognormal).
         """
         k = np.asarray(x, dtype=np.float64)
-        strikes = self.forward * np.exp(k)
-        return self._hagan_implied_vol(self.forward, strikes, self.expiry, self.alpha, self.beta, self.rho, self.nu)
+        forward = self.metadata.forward
+        if forward is None:
+            msg = "forward must be set in metadata before evaluating SABR"
+            raise ValueError(msg)
+        expiry = self.metadata.texpiry
+        strikes = forward * np.exp(k)
+        return self._hagan_implied_vol(forward, strikes, expiry, self.alpha, self.beta, self.rho, self.nu)
 
     @staticmethod
     def _hagan_implied_vol(

@@ -56,7 +56,7 @@ def cell_intro():
         | # | Layer | Key classes / functions |
         |---|-------|------------------------|
         | 1 | **Option chain** | `OptionChain` — load, filter, calibrate $F$, $D$ |
-        | 2 | **SmileData** | `to_smile_data()`, coordinate transforms |
+        | 2 | **VolData** | `to_vols()`, coordinate transforms |
         | 3 | **Model fitting** | `fit(sd, SVIModel)`, `fit(sd, SABRModel)` |
         | 4 | **Ancillary** | volume / open interest passthrough |
         """
@@ -274,7 +274,7 @@ def cell_chain_plot(chain, chain_raw):
 
 @app.cell(hide_code=True)
 def cell_sd_intro():
-    """Introduce SmileData section."""
+    """Introduce VolData section."""
     _x_table = (
         "| X-coordinate | Formula |\n"
         "|-------------|---------|\n"
@@ -297,9 +297,9 @@ def cell_sd_intro():
     mo.md(
         r"""
         ---
-        ## 2 · SmileData & Coordinate Transforms
+        ## 2 · VolData & Coordinate Transforms
 
-        `.to_smile_data()` delta-blends call/put implied vols into
+        `.to_vols()` delta-blends call/put implied vols into
         **(FixedStrike, Volatility)** using Black-76 call-delta weights.
 
         From there, `.transform(x, y)` moves freely between any combination:
@@ -315,16 +315,16 @@ def cell_sd_intro():
 
 @app.cell(hide_code=True)
 def cell_smile_data(chain):
-    """Create SmileData in price and vol coordinates."""
-    sd_vols = chain.to_smile_data()
+    """Create VolData in price and vol coordinates."""
+    sd_vols = chain.to_vols()
 
     mo.md(
         f"""
-    ### SmileData containers
+    ### VolData containers
 
     | Container | X coord | Y coord | Points |
     |-----------|---------|---------|-------:|
-    | `sd_vols` | {sd_vols.x_coord.name} | {sd_vols.y_coord.name} | {len(sd_vols.x)} |
+    | `sd_vols` | {sd_vols.current_x_coord.name} | {sd_vols.current_y_coord.name} | {len(sd_vols.x)} |
     | Volume attached | {"Yes" if sd_vols.volume is not None else "No"} |
     | Open interest attached | {"Yes" if sd_vols.open_interest is not None else "No"} |
     """
@@ -412,7 +412,7 @@ def cell_svi_intro():
 def cell_svi_fit(sd_vols):
     """Fit SVI to the market smile."""
     svi_result = fit(sd_vols, SVIModel)
-    p = svi_result.params
+    p = svi_result.model
 
     _params_table = f"""
     ### SVI Parameters
@@ -445,10 +445,9 @@ def cell_svi_fit(sd_vols):
 def cell_svi_plot(sd_vols, svi_result):
     """Overlay SVI fit on market vols."""
     _fwd = sd_vols.metadata.forward
-    _exp = sd_vols.metadata.texpiry
     _k_fine = np.linspace(sd_vols.x.min() * 0.95, sd_vols.x.max() * 1.05, 300)
     _log_k = np.log(_k_fine / _fwd)
-    _iv_svi = svi_result.params.implied_vol(_log_k, _exp)
+    _iv_svi = svi_result.model.transform(XCoord.LogMoneynessStrike, YCoord.Volatility).evaluate(_log_k)
 
     _fig = go.Figure()
     _fig.add_trace(
@@ -520,7 +519,7 @@ def cell_sabr_intro():
 def cell_sabr_fit(sd_vols):
     """Fit SABR to the market smile."""
     sabr_result = fit(sd_vols, SABRModel)
-    sp = sabr_result.params
+    sp = sabr_result.model
 
     _params_table = f"""
     ### SABR Parameters
@@ -554,7 +553,7 @@ def cell_sabr_plot(sabr_result, sd_vols):
     _fwd = sd_vols.metadata.forward
     _k_fine = np.linspace(sd_vols.x.min() * 0.95, sd_vols.x.max() * 1.05, 300)
     _log_k = np.log(_k_fine / _fwd)
-    _iv_sabr = sabr_result.params.evaluate(_log_k)
+    _iv_sabr = sabr_result.model.evaluate(_log_k)
 
     _fig = go.Figure()
     _fig.add_trace(
@@ -611,12 +610,11 @@ def cell_comparison_intro():
 def cell_model_comparison(sabr_result, sd_vols, svi_result):
     """Compare SVI and SABR fits on the same plot."""
     _fwd = sd_vols.metadata.forward
-    _exp = sd_vols.metadata.texpiry
     _k_fine = np.linspace(sd_vols.x.min() * 0.95, sd_vols.x.max() * 1.05, 300)
     _log_k = np.log(_k_fine / _fwd)
 
-    _iv_svi = svi_result.params.implied_vol(_log_k, _exp)
-    _iv_sabr = sabr_result.params.evaluate(_log_k)
+    _iv_svi = svi_result.model.transform(XCoord.LogMoneynessStrike, YCoord.Volatility).evaluate(_log_k)
+    _iv_sabr = sabr_result.model.evaluate(_log_k)
 
     _fig = go.Figure()
     _fig.add_trace(
@@ -680,8 +678,8 @@ def cell_vol_oi_intro():
 
         Optional `volume` and `open_interest` arrays flow through the
         entire pipeline — from `OptionChain` through `filter()`,
-        `to_smile_data()`, and
-        `SmileData.transform()`.
+        `to_vols()`, and
+        `VolData.transform()`.
         """
     )
     return
@@ -690,7 +688,7 @@ def cell_vol_oi_intro():
 @app.cell(hide_code=True)
 def cell_vol_oi_demo(chain):
     """Show volume / OI surviving the pipeline."""
-    sd_with_vol = chain.to_smile_data()
+    sd_with_vol = chain.to_vols()
     sd_transformed = sd_with_vol.transform(XCoord.LogMoneynessStrike, YCoord.TotalVariance)
 
     _fig = make_subplots(
@@ -741,7 +739,7 @@ def cell_vol_oi_demo(chain):
     | Pipeline stage | Volume? | OI? |
     |----------------|:-------:|:---:|
     | `OptionChain` (raw) | {_vol(chain)} | {_oi(chain)} |
-    | `to_smile_data()` | {_vol(sd_with_vol)} | {_oi(sd_with_vol)} |
+    | `to_vols()` | {_vol(sd_with_vol)} | {_oi(sd_with_vol)} |
     | `transform(LogMoneyness, TotalVar)` | {_vol(sd_transformed)} | {_oi(sd_transformed)} |
     """
             ),
@@ -763,7 +761,7 @@ def cell_summary():
         | Load | `OptionChain(...)` | Stores bid/ask prices |
         | Clean | `.filter()` | 5-filter arbitrage removal |
         | Calibrate | automatic | Forward $F$ and discount factor $D$ from put-call parity |
-        | Convert | `.to_smile_data()` | Delta-blended implied vols |
+        | Convert | `.to_vols()` | Delta-blended implied vols |
         | Transform | `.transform(x, y)` | Any $(X, Y)$ coordinate pair |
         | Fit | `fit(sd, SVIModel)` / `fit(sd, SABRModel)` | Parametric smile fit |
         | Ancillary | `volume`, `open_interest` | Optional data carried through pipeline |

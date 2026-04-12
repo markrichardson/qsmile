@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+from qsmile.data.io import SampleDataReader
 from qsmile.data.meta import SmileMetadata
 from qsmile.data.prices import OptionChain
 from qsmile.data.strikes import StrikeArray
-from qsmile.data.vols import SmileData
+from qsmile.data.vols import VolData
 
 __all__ = [
     "OptionChain",
-    "SmileData",
+    "SampleDataReader",
     "SmileMetadata",
     "StrikeArray",
+    "VolData",
 ]

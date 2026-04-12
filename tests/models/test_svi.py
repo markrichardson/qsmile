@@ -3,16 +3,25 @@
 from __future__ import annotations
 
 import numpy as np
+import pandas as pd
 import pytest
 
 from qsmile.core.coords import XCoord, YCoord
-from qsmile.models.protocol import SmileModel
+from qsmile.data.meta import SmileMetadata
+from qsmile.models.base import SmileModel
 from qsmile.models.svi import SVIModel
+
+_META = SmileMetadata(
+    date=pd.Timestamp("2024-01-01"),
+    expiry=pd.Timestamp("2024-07-01"),
+    forward=100.0,
+    sigma_atm=0.2,
+)
 
 
 class TestSVIModel:
     def test_create_valid(self):
-        p = SVIModel(a=0.04, b=0.1, rho=-0.3, m=0.0, sigma=0.2)
+        p = SVIModel(a=0.04, b=0.1, rho=-0.3, m=0.0, sigma=0.2, metadata=_META)
         assert p.a == 0.04
         assert p.b == 0.1
         assert p.rho == -0.3
@@ -21,84 +30,64 @@ class TestSVIModel:
 
     def test_negative_b(self):
         with pytest.raises(ValueError, match="b must be non-negative"):
-            SVIModel(a=0.04, b=-0.1, rho=-0.3, m=0.0, sigma=0.2)
+            SVIModel(a=0.04, b=-0.1, rho=-0.3, m=0.0, sigma=0.2, metadata=_META)
 
     def test_rho_out_of_range_positive(self):
         with pytest.raises(ValueError, match="rho must be in"):
-            SVIModel(a=0.04, b=0.1, rho=1.0, m=0.0, sigma=0.2)
+            SVIModel(a=0.04, b=0.1, rho=1.0, m=0.0, sigma=0.2, metadata=_META)
 
     def test_rho_out_of_range_negative(self):
         with pytest.raises(ValueError, match="rho must be in"):
-            SVIModel(a=0.04, b=0.1, rho=-1.0, m=0.0, sigma=0.2)
+            SVIModel(a=0.04, b=0.1, rho=-1.0, m=0.0, sigma=0.2, metadata=_META)
 
     def test_non_positive_sigma(self):
         with pytest.raises(ValueError, match="sigma must be positive"):
-            SVIModel(a=0.04, b=0.1, rho=-0.3, m=0.0, sigma=0.0)
+            SVIModel(a=0.04, b=0.1, rho=-0.3, m=0.0, sigma=0.0, metadata=_META)
 
     def test_b_zero_is_valid(self):
-        p = SVIModel(a=0.04, b=0.0, rho=0.0, m=0.0, sigma=0.2)
+        p = SVIModel(a=0.04, b=0.0, rho=0.0, m=0.0, sigma=0.2, metadata=_META)
         assert p.b == 0.0
 
 
 class TestSVITotalVariance:
     def test_scalar_k(self):
-        params = SVIModel(a=0.04, b=0.1, rho=-0.3, m=0.0, sigma=0.2)
+        params = SVIModel(a=0.04, b=0.1, rho=-0.3, m=0.0, sigma=0.2, metadata=_META)
         result = params.evaluate(0.0)
         expected = 0.04 + 0.1 * ((-0.3) * 0.0 + np.sqrt(0.0 + 0.04))
         assert abs(float(result) - expected) < 1e-12
 
     def test_array_k(self):
-        params = SVIModel(a=0.04, b=0.1, rho=-0.3, m=0.0, sigma=0.2)
+        params = SVIModel(a=0.04, b=0.1, rho=-0.3, m=0.0, sigma=0.2, metadata=_META)
         k = np.array([-0.1, 0.0, 0.1])
         result = params.evaluate(k)
         assert result.shape == (3,)
 
     def test_symmetry_when_rho_zero(self):
-        params = SVIModel(a=0.04, b=0.1, rho=0.0, m=0.0, sigma=0.2)
+        params = SVIModel(a=0.04, b=0.1, rho=0.0, m=0.0, sigma=0.2, metadata=_META)
         delta = 0.15
         w_pos = params.evaluate(params.m + delta)
         w_neg = params.evaluate(params.m - delta)
         np.testing.assert_allclose(w_pos, w_neg)
 
     def test_known_formula(self):
-        params = SVIModel(a=0.02, b=0.15, rho=-0.5, m=0.01, sigma=0.3)
+        params = SVIModel(a=0.02, b=0.15, rho=-0.5, m=0.01, sigma=0.3, metadata=_META)
         k = 0.05
         d = k - params.m
         expected = params.a + params.b * (params.rho * d + np.sqrt(d**2 + params.sigma**2))
         np.testing.assert_allclose(params.evaluate(k), expected)
 
 
-class TestSVIImpliedVol:
-    def test_basic(self):
-        params = SVIModel(a=0.04, b=0.1, rho=-0.3, m=0.0, sigma=0.2)
-        expiry = 0.5
-        k = np.array([-0.1, 0.0, 0.1])
-        iv = params.implied_vol(k, expiry)
-        w = params.evaluate(k)
-        np.testing.assert_allclose(iv, np.sqrt(w / expiry))
-
-    def test_non_positive_expiry(self):
-        params = SVIModel(a=0.04, b=0.1, rho=-0.3, m=0.0, sigma=0.2)
-        with pytest.raises(ValueError, match="expiry must be positive"):
-            params.implied_vol(0.0, 0.0)
-
-    def test_negative_expiry(self):
-        params = SVIModel(a=0.04, b=0.1, rho=-0.3, m=0.0, sigma=0.2)
-        with pytest.raises(ValueError, match="expiry must be positive"):
-            params.implied_vol(0.0, -1.0)
-
-
 class TestSVIModelProtocol:
-    """SVIModel satisfies the SmileModel protocol."""
+    """SVIModel satisfies the SmileModel ABC."""
 
     def test_isinstance_check(self):
-        p = SVIModel(a=0.04, b=0.1, rho=-0.3, m=0.0, sigma=0.2)
+        p = SVIModel(a=0.04, b=0.1, rho=-0.3, m=0.0, sigma=0.2, metadata=_META)
         assert isinstance(p, SmileModel)
 
     def test_round_trip_serialisation(self):
-        p = SVIModel(a=0.04, b=0.1, rho=-0.3, m=0.0, sigma=0.2)
+        p = SVIModel(a=0.04, b=0.1, rho=-0.3, m=0.0, sigma=0.2, metadata=_META)
         arr = p.to_array()
-        recovered = SVIModel.from_array(arr)
+        recovered = SVIModel.from_array(arr, metadata=_META)
         np.testing.assert_allclose(recovered.to_array(), p.to_array())
 
 
@@ -119,3 +108,35 @@ class TestSVIModelMetadata:
         w = 0.04 + 0.1 * np.sqrt(k**2 + 0.04)
         guess = SVIModel.initial_guess(k, w)
         assert len(guess) == 5
+
+
+class TestSVIModelCoordAware:
+    """SVIModel inherits coordinate-awareness from AbstractSmileModel."""
+
+    def test_default_current_coords(self):
+        p = SVIModel(a=0.04, b=0.1, rho=-0.3, m=0.0, sigma=0.2, metadata=_META)
+        assert p.current_x_coord == XCoord.LogMoneynessStrike
+        assert p.current_y_coord == YCoord.TotalVariance
+
+    def test_transform(self):
+        p = SVIModel(a=0.04, b=0.1, rho=-0.3, m=0.0, sigma=0.2, metadata=_META)
+        t = p.transform(XCoord.FixedStrike, YCoord.Volatility)
+        assert t.current_x_coord == XCoord.FixedStrike
+        assert t.current_y_coord == YCoord.Volatility
+
+    def test_evaluate_in_native_equals_raw(self):
+        p = SVIModel(a=0.04, b=0.1, rho=-0.3, m=0.0, sigma=0.2, metadata=_META)
+        k = np.array([-0.1, 0.0, 0.1])
+        np.testing.assert_allclose(p.evaluate(k), p._evaluate(k))
+
+    def test_params_dict(self):
+        p = SVIModel(a=0.04, b=0.1, rho=-0.3, m=0.0, sigma=0.2, metadata=_META)
+        d = p.params
+        assert d == {"a": 0.04, "b": 0.1, "rho": -0.3, "m": 0.0, "sigma": 0.2}
+
+    def test_plot_returns_figure(self):
+        p = SVIModel(a=0.04, b=0.1, rho=-0.3, m=0.0, sigma=0.2, metadata=_META)
+        fig = p.plot()
+        import matplotlib.figure
+
+        assert isinstance(fig, matplotlib.figure.Figure)

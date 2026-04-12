@@ -1,91 +1,84 @@
 ## MODIFIED Requirements
 
-### Requirement: SmileData stores coordinate-labelled smile data
-The system SHALL provide a `SmileData` dataclass that holds `strikearray: StrikeArray`, `x_coord: XCoord`, `y_coord: YCoord`, and `metadata: SmileMetadata`. The `StrikeArray` SHALL use the strike axis as its index and store Y-axis bid/ask data as columns `("y", "bid")` and `("y", "ask")`. Optional volume and open interest SHALL be stored as `("y", "volume")` and `("y", "open_interest")` columns in the `StrikeArray`. Construction SHALL validate coordinate-specific domain invariants and require at least 3 data points.
+### Requirement: VolData stores coordinate-labelled smile data
+The system SHALL provide a `VolData` dataclass that holds `strikearray: StrikeArray`, `current_x_coord: XCoord`, `current_y_coord: YCoord`, and `metadata: SmileMetadata`. The `current_x_coord` and `current_y_coord` fields SHALL indicate the coordinate system data is currently presented in. Construction SHALL set `current_x_coord` and `current_y_coord` to the coordinates the data was originally provided in. The `StrikeArray` SHALL use the strike axis as its index and store Y-axis bid/ask data as columns `("y", "bid")` and `("y", "ask")`. Optional volume and open interest SHALL be stored as `("meta", "volume")` and `("meta", "open_interest")` columns in the `StrikeArray`. Construction SHALL validate coordinate-specific domain invariants and require at least 3 data points.
 
-#### Scenario: Construct SmileData with StrikeArray
-- **WHEN** a user creates a `SmileData` with a populated `StrikeArray` (containing `("y", "bid")` and `("y", "ask")` columns), coordinate labels, and metadata
-- **THEN** all fields SHALL be stored and accessible as attributes
+#### Scenario: Construct VolData with current coord fields
+- **WHEN** a user creates a `VolData` with a populated `StrikeArray`, coordinate labels, and metadata
+- **THEN** `current_x_coord` and `current_y_coord` SHALL be accessible as attributes
+- **AND** they SHALL equal the coordinates provided at construction
 
 #### Scenario: Fewer than 3 points rejected
 - **WHEN** the `StrikeArray` contains fewer than 3 strikes
 - **THEN** the system SHALL raise a `ValueError`
 
 #### Scenario: Domain validation applied
-- **WHEN** a `SmileData` is constructed with `x_coord=FixedStrike` and non-positive strikes in the `StrikeArray`
+- **WHEN** a `VolData` is constructed with `current_x_coord=FixedStrike` and non-positive strikes in the `StrikeArray`
 - **THEN** the system SHALL raise a `ValueError`
 
-### Requirement: SmileData provides mid Y values
+### Requirement: VolData provides mid Y values
 The system SHALL provide a `y_mid` property returning the element-wise mean of the bid and ask columns from the `StrikeArray`.
 
 #### Scenario: Mid computation
 - **WHEN** `y_mid` is accessed
 - **THEN** the system SHALL return `(y_bid + y_ask) / 2` as an NDArray
 
-### Requirement: SmileData transforms to target coordinates
-The system SHALL provide a `transform(target_x: XCoord, target_y: YCoord) -> SmileData` method that returns a new `SmileData` with the data re-expressed in the target coordinate system. The returned `SmileData` SHALL use a new `StrikeArray` populated with the transformed values using tuple keys `("y", "bid")` and `("y", "ask")`.
+### Requirement: VolData transforms to target coordinates
+The system SHALL provide a `transform(target_x: XCoord, target_y: YCoord) -> VolData` method that returns a new `VolData` with `current_x_coord` and `current_y_coord` set to the target values. The underlying native data SHALL NOT be physically transformed; instead, property accessors SHALL apply transforms lazily.
 
-#### Scenario: Identity transform
-- **WHEN** `transform()` is called with the same X and Y coordinates as the source
-- **THEN** the returned SmileData SHALL contain numerically identical arrays
+#### Scenario: Transform updates current coords
+- **WHEN** `transform(target_x, target_y)` is called
+- **THEN** the returned VolData SHALL have `current_x_coord == target_x` and `current_y_coord == target_y`
 
-#### Scenario: X-only transform
-- **WHEN** `transform()` is called with a different target_x but the same target_y
-- **THEN** only the X values (strikes) SHALL change; Y values SHALL remain the same
-
-#### Scenario: Y-only transform
-- **WHEN** `transform()` is called with the same target_x but a different target_y
-- **THEN** only the Y values SHALL change; X values SHALL remain the same
-
-#### Scenario: Combined X and Y transform
-- **WHEN** `transform()` is called with different target_x and target_y
-- **THEN** both X and Y values SHALL be transformed to the target coordinate system
+#### Scenario: Transform preserves native data
+- **WHEN** `transform()` is called
+- **THEN** the returned VolData's internal `StrikeArray` SHALL be unchanged
 
 #### Scenario: Round-trip transform preserves data
-- **WHEN** SmileData is transformed from coordinates (A, B) to (C, D) and back to (A, B)
-- **THEN** the recovered arrays SHALL match the originals within floating-point tolerance
+- **WHEN** VolData is transformed from coordinates (A, B) to (C, D) and back to (A, B)
+- **THEN** the recovered arrays from accessors SHALL match the originals within floating-point tolerance
 
 #### Scenario: Transform requiring sigma_atm without it raises error
 - **WHEN** a transform to or from `StandardisedStrike` is requested and metadata.sigma_atm is None
 - **THEN** the system SHALL raise a `ValueError` with a clear message
 
-### Requirement: SmileData accepts optional volume data
-Volume SHALL be stored as a `("y", "volume")` column in the `StrikeArray`. If no volume column is present, the system SHALL treat volume as absent.
+### Requirement: VolData accepts optional volume data
+Volume SHALL be stored as a `("meta", "volume")` column in the `StrikeArray`. If no volume column is present, the system SHALL treat volume as absent.
 
-#### Scenario: Construct SmileData with volume
-- **WHEN** a user creates a `SmileData` whose `StrikeArray` has a `("y", "volume")` column
-- **THEN** the volume SHALL be accessible via `strikearray.values(("y", "volume"))`
+#### Scenario: Construct VolData with volume
+- **WHEN** a user creates a `VolData` whose `StrikeArray` has a `("meta", "volume")` column
+- **THEN** the volume SHALL be accessible via `volume` property
 
-#### Scenario: Construct SmileData without volume
-- **WHEN** a user creates a `SmileData` whose `StrikeArray` has no volume column
-- **THEN** `strikearray.get_values(("y", "volume"))` SHALL return `None`
+#### Scenario: Construct VolData without volume
+- **WHEN** a user creates a `VolData` whose `StrikeArray` has no volume column
+- **THEN** `volume` SHALL return `None`
 
 #### Scenario: Negative volume rejected
 - **WHEN** any value in the volume column is negative
 - **THEN** the system SHALL raise a `ValueError`
 
-### Requirement: SmileData accepts optional open interest data
-Open interest SHALL be stored as a `("y", "open_interest")` column in the `StrikeArray`. If no open interest column is present, the system SHALL treat open interest as absent.
+### Requirement: VolData accepts optional open interest data
+Open interest SHALL be stored as a `("meta", "open_interest")` column in the `StrikeArray`. If no open interest column is present, the system SHALL treat open interest as absent.
 
-#### Scenario: Construct SmileData with open interest
-- **WHEN** a user creates a `SmileData` whose `StrikeArray` has a `("y", "open_interest")` column
-- **THEN** the open interest SHALL be accessible via `strikearray.values(("y", "open_interest"))`
+#### Scenario: Construct VolData with open interest
+- **WHEN** a user creates a `VolData` whose `StrikeArray` has a `("meta", "open_interest")` column
+- **THEN** the open interest SHALL be accessible via `open_interest` property
 
-#### Scenario: Construct SmileData without open interest
-- **WHEN** a user creates a `SmileData` whose `StrikeArray` has no open_interest column
-- **THEN** `strikearray.get_values(("y", "open_interest"))` SHALL return `None`
+#### Scenario: Construct VolData without open interest
+- **WHEN** a user creates a `VolData` whose `StrikeArray` has no open_interest column
+- **THEN** `open_interest` SHALL return `None`
 
 #### Scenario: Negative open interest rejected
 - **WHEN** any value in the open_interest column is negative
 - **THEN** the system SHALL raise a `ValueError`
 
-### Requirement: SmileData transform preserves volume and open interest
-The `transform()` method SHALL propagate volume and open interest columns to the returned `SmileData`'s `StrikeArray` using tuple keys. Since transforms do not filter points, the arrays SHALL be copied as-is into the new `StrikeArray`.
+### Requirement: VolData transform preserves volume and open interest
+The `transform()` method SHALL propagate volume and open interest data to the returned `VolData`. Since the native `StrikeArray` is shared, volume and open interest SHALL be accessible on the transformed instance.
 
 #### Scenario: Transform preserves volume
-- **WHEN** `transform()` is called on a `SmileData` whose `StrikeArray` has a `("y", "volume")` column
-- **THEN** the returned `SmileData`'s `StrikeArray` SHALL have the same volume data
+- **WHEN** `transform()` is called on a `VolData` whose `StrikeArray` has a `("meta", "volume")` column
+- **THEN** the returned `VolData`'s `volume` property SHALL return the same data
 
 #### Scenario: Transform preserves open interest
-- **WHEN** `transform()` is called on a `SmileData` whose `StrikeArray` has a `("y", "open_interest")` column
-- **THEN** the returned `SmileData`'s `StrikeArray` SHALL have the same open interest data
+- **WHEN** `transform()` is called on a `VolData` whose `StrikeArray` has a `("meta", "open_interest")` column
+- **THEN** the returned `VolData`'s `open_interest` property SHALL return the same data

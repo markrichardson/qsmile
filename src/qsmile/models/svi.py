@@ -9,11 +9,11 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 from qsmile.core.coords import XCoord, YCoord
-from qsmile.models.protocol import AbstractSmileModel
+from qsmile.models.base import SmileModel
 
 
 @dataclass
-class SVIModel(AbstractSmileModel):
+class SVIModel(SmileModel):
     """Raw SVI parameterisation: model definition and fitted parameters.
 
     The SVI raw parameterisation models total implied variance as:
@@ -61,6 +61,7 @@ class SVIModel(AbstractSmileModel):
 
     def __post_init__(self) -> None:
         """Validate SVI parameter constraints."""
+        super().__post_init__()
         if self.b < 0:
             msg = f"b must be non-negative, got {self.b}"
             raise ValueError(msg)
@@ -71,7 +72,7 @@ class SVIModel(AbstractSmileModel):
             msg = f"sigma must be positive, got {self.sigma}"
             raise ValueError(msg)
 
-    def evaluate(self, x: ArrayLike) -> NDArray[np.float64] | np.float64:
+    def _evaluate(self, x: ArrayLike) -> NDArray[np.float64] | np.float64:
         """Compute SVI total variance at the given log-moneyness values.
 
         w(k) = a + b * (rho * (k - m) + sqrt((k - m)^2 + sigma^2))
@@ -79,24 +80,6 @@ class SVIModel(AbstractSmileModel):
         k = np.asarray(x, dtype=np.float64)
         d = k - self.m
         return self.a + self.b * (self.rho * d + np.sqrt(d**2 + self.sigma**2))
-
-    def implied_vol(self, k: ArrayLike, expiry: float) -> NDArray[np.float64] | np.float64:
-        """Compute SVI implied volatility from total variance.
-
-        sigma_IV = sqrt(w(k) / T)
-
-        Parameters
-        ----------
-        k : ArrayLike
-            Log-moneyness values.
-        expiry : float
-            Time to expiration in years. Must be positive.
-        """
-        if expiry <= 0:
-            msg = f"expiry must be positive, got {expiry}"
-            raise ValueError(msg)
-        w = self.evaluate(k)
-        return np.sqrt(w / expiry)
 
     @staticmethod
     def initial_guess(x: NDArray[np.float64], y: NDArray[np.float64]) -> NDArray[np.float64]:

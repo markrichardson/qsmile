@@ -3,15 +3,24 @@
 from __future__ import annotations
 
 import numpy as np
+import pandas as pd
 import pytest
 
 from qsmile.core.coords import XCoord, YCoord
-from qsmile.models.protocol import SmileModel
+from qsmile.data.meta import SmileMetadata
+from qsmile.models.base import SmileModel
 from qsmile.models.sabr import SABRModel
 
 # -- Reusable fixtures --
 
-_VALID_PARAMS = {"alpha": 0.2, "beta": 0.5, "rho": -0.3, "nu": 0.4, "expiry": 1.0, "forward": 100.0}
+_META = SmileMetadata(
+    date=pd.Timestamp("2024-01-01"),
+    expiry=pd.Timestamp("2025-01-01"),
+    forward=100.0,
+    sigma_atm=0.2,
+)
+
+_VALID_PARAMS = {"alpha": 0.2, "beta": 0.5, "rho": -0.3, "nu": 0.4, "metadata": _META}
 
 
 class TestSABRModel:
@@ -21,8 +30,6 @@ class TestSABRModel:
         assert m.beta == 0.5
         assert m.rho == -0.3
         assert m.nu == 0.4
-        assert m.expiry == 1.0
-        assert m.forward == 100.0
 
     def test_negative_alpha(self):
         with pytest.raises(ValueError, match="alpha"):
@@ -60,14 +67,6 @@ class TestSABRModel:
         m = SABRModel(**{**_VALID_PARAMS, "beta": 1.0})
         assert m.beta == 1.0
 
-    def test_non_positive_expiry(self):
-        with pytest.raises(ValueError, match="expiry"):
-            SABRModel(**{**_VALID_PARAMS, "expiry": 0.0})
-
-    def test_non_positive_forward(self):
-        with pytest.raises(ValueError, match="forward"):
-            SABRModel(**{**_VALID_PARAMS, "forward": -1.0})
-
 
 class TestSABRModelMetadata:
     def test_native_coords(self):
@@ -93,14 +92,12 @@ class TestSABRModelSerialisation:
     def test_to_array_excludes_context_fields(self):
         m = SABRModel(**_VALID_PARAMS)
         arr = m.to_array()
-        assert len(arr) == 4  # only alpha, beta, rho, nu — not expiry, forward
+        assert len(arr) == 4  # only alpha, beta, rho, nu
 
     def test_round_trip(self):
         m = SABRModel(**_VALID_PARAMS)
-        recovered = SABRModel.from_array(m.to_array(), expiry=1.0, forward=100.0)
+        recovered = SABRModel.from_array(m.to_array(), metadata=_META)
         np.testing.assert_allclose(recovered.to_array(), m.to_array())
-        assert recovered.expiry == m.expiry
-        assert recovered.forward == m.forward
 
 
 class TestSABRModelEvaluate:
@@ -120,14 +117,14 @@ class TestSABRModelEvaluate:
 
     def test_negative_rho_gives_left_skew(self):
         """Negative rho should produce higher vol for low strikes (negative k)."""
-        m = SABRModel(alpha=0.2, beta=0.5, rho=-0.5, nu=0.4, expiry=1.0, forward=100.0)
+        m = SABRModel(alpha=0.2, beta=0.5, rho=-0.5, nu=0.4, metadata=_META)
         iv_left = m.evaluate(-0.15)
         iv_right = m.evaluate(0.15)
         assert float(iv_left) > float(iv_right)
 
     def test_beta_one_lognormal(self):
         """beta=1 is the lognormal SABR case — should still produce finite vols."""
-        m = SABRModel(alpha=0.2, beta=1.0, rho=-0.3, nu=0.3, expiry=1.0, forward=100.0)
+        m = SABRModel(alpha=0.2, beta=1.0, rho=-0.3, nu=0.3, metadata=_META)
         k = np.linspace(-0.1, 0.1, 5)
         iv = m.evaluate(k)
         assert np.all(np.isfinite(iv))
@@ -135,7 +132,7 @@ class TestSABRModelEvaluate:
 
     def test_nu_zero_flat_smile(self):
         """When nu=0, the smile should be essentially flat (no vol-of-vol)."""
-        m = SABRModel(alpha=0.2, beta=0.5, rho=0.0, nu=0.0, expiry=1.0, forward=100.0)
+        m = SABRModel(alpha=0.2, beta=0.5, rho=0.0, nu=0.0, metadata=_META)
         k = np.linspace(-0.1, 0.1, 5)
         iv = m.evaluate(k)
         # All vols should be very close to ATM vol
@@ -164,3 +161,40 @@ class TestSABRModelProtocol:
     def test_isinstance_check(self):
         m = SABRModel(**_VALID_PARAMS)
         assert isinstance(m, SmileModel)
+
+
+class TestSABRModelCoordAware:
+    """SABRModel inherits coordinate-awareness from AbstractSmileModel."""
+
+    def test_default_current_coords(self):
+        m = SABRModel(**_VALID_PARAMS)
+        assert m.current_x_coord == XCoord.LogMoneynessStrike
+        assert m.current_y_coord == YCoord.Volatility
+
+    def test_transform(self):
+        m = SABRModel(**_VALID_PARAMS)
+        t = m.transform(XCoord.FixedStrike, YCoord.TotalVariance)
+        assert t.current_x_coord == XCoord.FixedStrike
+        assert t.current_y_coord == YCoord.TotalVariance
+
+    def test_evaluate_in_native_equals_raw(self):
+        m = SABRModel(**_VALID_PARAMS)
+        k = np.array([-0.1, 0.0, 0.1])
+        np.testing.assert_allclose(m.evaluate(k), m._evaluate(k))
+
+    def test_params_dict(self):
+        m = SABRModel(**_VALID_PARAMS)
+        d = m.params
+        assert d == {"alpha": 0.2, "beta": 0.5, "rho": -0.3, "nu": 0.4}
+
+    def test_metadata_accessible(self):
+        m = SABRModel(**_VALID_PARAMS)
+        assert m.metadata is _META
+        assert m.metadata.forward == 100.0
+
+    def test_plot_returns_figure(self):
+        m = SABRModel(**_VALID_PARAMS)
+        fig = m.plot()
+        import matplotlib.figure
+
+        assert isinstance(fig, matplotlib.figure.Figure)

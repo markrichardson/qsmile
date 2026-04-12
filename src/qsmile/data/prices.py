@@ -17,7 +17,7 @@ from qsmile.data.strikes import StrikeArray
 if TYPE_CHECKING:
     import matplotlib.figure
 
-    from qsmile.data.vols import SmileData
+    from qsmile.data.vols import VolData
 
 
 def _calibrate_forward_df(
@@ -141,13 +141,15 @@ def delta_blend_ivols(
     safe_sigma = np.where(safe_sigma <= 0, 1e-8, safe_sigma)
 
     d1 = (np.log(forward / strikes) + 0.5 * safe_sigma**2 * expiry) / (safe_sigma * sqrt_t)
-    w = norm.cdf(d1)
+    # w = 1 - Phi(d1): ≈ 0 at low strikes (OTM put region), ≈ 1 at high strikes (OTM call region)
+    # Used as the call weight so OTM options dominate in each wing.
+    w = 1.0 - norm.cdf(d1)
 
-    # Mask NaN vols: if call is NaN, force weight to 0 (use put); if put is NaN, force to 1 (use call)
+    # Mask NaN vols: if call is NaN, force w=0 (use put); if put is NaN, force w=1 (use call)
     call_available = ~np.isnan(call_bid_ivols)
     put_available = ~np.isnan(put_bid_ivols)
 
-    # Both missing → NaN
+    # Both missing -> NaN
     neither = ~call_available & ~put_available
     w = np.where(call_available & ~put_available, 1.0, w)
     w = np.where(~call_available & put_available, 0.0, w)
@@ -159,13 +161,14 @@ def delta_blend_ivols(
     pb = np.where(np.isnan(put_bid_ivols), 0.0, put_bid_ivols)
     pa = np.where(np.isnan(put_ask_ivols), 0.0, put_ask_ivols)
 
+    # w weights calls, (1-w) weights puts: OTM dominates in each wing
     blended_bid = w * cb + (1.0 - w) * pb
     blended_ask = w * ca + (1.0 - w) * pa
 
     return blended_bid, blended_ask
 
 
-@dataclass
+@dataclass(repr=False)
 class OptionChain:
     """Bid/ask option price chain for a single expiry.
 
@@ -231,6 +234,15 @@ class OptionChain:
                 discount_factor=meta.discount_factor if meta.discount_factor is not None else d_cal,
             )
 
+    def __repr__(self) -> str:
+        """Compact repr with date, expiry, forward, and discount factor."""
+        m = self.metadata
+        date = m.date.strftime("%Y-%m-%d")
+        expiry = m.expiry.strftime("%Y-%m-%d")
+        fwd = f"{m.forward:.2f}" if m.forward is not None else "None"
+        df = f"{m.discount_factor:.2f}" if m.discount_factor is not None else "None"
+        return f"OptionChain(date={date}, expiry={expiry}, forward={fwd}, discount_factor={df})"
+
     # ── convenience accessors ─────────────────────────────────────
 
     @property
@@ -278,8 +290,8 @@ class OptionChain:
         """Midpoint of put bid and ask prices."""
         return (self.put_bid + self.put_ask) / 2.0
 
-    def to_smile_data(self) -> SmileData:
-        """Convert to a SmileData with (FixedStrike, Volatility) using delta-blended vols.
+    def to_vols(self) -> VolData:
+        """Convert to a VolData with (FixedStrike, Volatility) using delta-blended vols.
 
         Inverts both call and put prices to implied vols at every strike, then
         blends them using Black76 undiscounted call-delta weights. OTM options
@@ -289,11 +301,11 @@ class OptionChain:
         """
         from qsmile.core.black76 import black76_implied_vol
         from qsmile.core.coords import XCoord, YCoord
-        from qsmile.data.vols import SmileData
+        from qsmile.data.vols import VolData
 
         meta = self.metadata
         if meta.forward is None or meta.discount_factor is None:
-            msg = "forward and discount_factor must be calibrated before to_smile_data()"
+            msg = "forward and discount_factor must be calibrated before to_vols()"
             raise TypeError(msg)
 
         n = len(self.strikes)
@@ -356,10 +368,10 @@ class OptionChain:
         if self.open_interest is not None:
             sa.set(("meta", "open_interest"), pd.Series(self.open_interest[valid], index=idx))
 
-        return SmileData(
+        return VolData(
             strikearray=sa,
-            x_coord=XCoord.FixedStrike,
-            y_coord=YCoord.Volatility,
+            current_x_coord=XCoord.FixedStrike,
+            current_y_coord=YCoord.Volatility,
             metadata=replace(meta, sigma_atm=sigma_atm),
         )
 
@@ -476,14 +488,15 @@ class OptionChain:
             ),
         )
 
-    def plot(self, *, title: str = "Option Chain Prices") -> matplotlib.figure.Figure:
+    def plot(self, *, title: str = "Option Chain Prices", ax=None, **kwargs) -> matplotlib.figure.Figure:
         """Plot bid/ask prices as error bars for calls and puts."""
         from qsmile.core.plot import _require_matplotlib, plot_bid_ask
 
         _require_matplotlib()
         import matplotlib.pyplot as plt
 
-        fig, ax = plt.subplots()
+        if ax is None:
+            _, ax = plt.subplots()
         plot_bid_ask(
             self.strikes,
             self.call_mid,
@@ -491,7 +504,9 @@ class OptionChain:
             self.call_ask,
             label="Calls",
             color="tab:blue",
+            fmt="none",
             ax=ax,
+            **kwargs,
         )
         plot_bid_ask(
             self.strikes,
@@ -500,10 +515,16 @@ class OptionChain:
             self.put_ask,
             label="Puts",
             color="tab:red",
+            fmt="none",
             ax=ax,
+            **kwargs,
         )
         ax.set_xlabel("Strike")
         ax.set_ylabel("Price")
         ax.set_title(title)
         ax.legend()
+        fig = ax.get_figure()
+        if not isinstance(fig, plt.Figure):
+            msg = "Expected a matplotlib Figure from ax.get_figure()"
+            raise TypeError(msg)
         return fig
