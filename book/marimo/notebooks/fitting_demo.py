@@ -56,35 +56,37 @@ def _(chain_clean):
 
 @app.cell
 def _(chain_clean):
-    fixed_strike_vols = chain_clean.to_vols()
-    return (fixed_strike_vols,)
+    vldta = chain_clean.to_vols()
+    return (vldta,)
 
 
 @app.cell
-def _(fixed_strike_vols):
+def _(vldta):
     _fig, _ax = plt.subplots(figsize=(10, 5))
-    fixed_strike_vols.plot(ax=_ax)
+    vldta.plot(ax=_ax)
     return
 
 
 @app.cell
-def _(SVIModel, fit, fixed_strike_vols):
+def _(SVIModel, fit, vldta):
     # fixed_strike_vols = chain.filter().to_vols()
-    result = fit(fixed_strike_vols, model=SVIModel)
-    return (result,)
+    result = fit(vldta, model=SVIModel)
+    model = result.model
+    return (model,)
 
 
 @app.cell
-def _(XCoord, YCoord, fixed_strike_vols, result):
+def _(XCoord, YCoord, model, vldta):
     _fig, _ax = plt.subplots(figsize=(10, 5))
-    fixed_strike_vols.plot(ax=_ax)
-    result.model.transform(XCoord.FixedStrike, YCoord.Volatility).plot(ax=_ax, std_range=[-5, 2])
+    space = XCoord.StandardisedStrike, YCoord.TotalVariance
+    space = XCoord.FixedStrike, YCoord.Volatility
+    vldta.transform(*space).plot(ax=_ax)
+    model.transform(*space).plot(ax=_ax)
     return
 
 
 @app.cell
-def _(result):
-    result.model.metadata
+def _():
     return
 
 

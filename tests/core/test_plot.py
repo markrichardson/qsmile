@@ -29,8 +29,8 @@ def sample_vol_smile():
     strikes = np.array([90.0, 100.0, 110.0])
     return VolData(
         strikearray=_make_sa(strikes, np.array([0.24, 0.19, 0.21]), np.array([0.26, 0.21, 0.23])),
-        x_coord=XCoord.FixedStrike,
-        y_coord=YCoord.Volatility,
+        current_x_coord=XCoord.FixedStrike,
+        current_y_coord=YCoord.Volatility,
         metadata=SmileMetadata(
             date=pd.Timestamp("2024-01-01"),
             expiry=pd.Timestamp("2024-07-01"),
@@ -47,8 +47,8 @@ def sample_unitised_smile():
     k = np.array([-1.0, 0.0, 1.0])
     return VolData(
         strikearray=_make_sa(k, np.array([0.019, 0.018, 0.019]), np.array([0.021, 0.020, 0.021])),
-        x_coord=XCoord.StandardisedStrike,
-        y_coord=YCoord.TotalVariance,
+        current_x_coord=XCoord.StandardisedStrike,
+        current_y_coord=YCoord.TotalVariance,
         metadata=SmileMetadata(
             date=pd.Timestamp("2024-01-01"),
             expiry=pd.Timestamp("2024-07-01"),

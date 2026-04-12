@@ -370,8 +370,8 @@ class OptionChain:
 
         return VolData(
             strikearray=sa,
-            x_coord=XCoord.FixedStrike,
-            y_coord=YCoord.Volatility,
+            current_x_coord=XCoord.FixedStrike,
+            current_y_coord=YCoord.Volatility,
             metadata=replace(meta, sigma_atm=sigma_atm),
         )
 

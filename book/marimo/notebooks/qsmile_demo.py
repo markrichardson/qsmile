@@ -324,7 +324,7 @@ def cell_smile_data(chain):
 
     | Container | X coord | Y coord | Points |
     |-----------|---------|---------|-------:|
-    | `sd_vols` | {sd_vols.x_coord.name} | {sd_vols.y_coord.name} | {len(sd_vols.x)} |
+    | `sd_vols` | {sd_vols.current_x_coord.name} | {sd_vols.current_y_coord.name} | {len(sd_vols.x)} |
     | Volume attached | {"Yes" if sd_vols.volume is not None else "No"} |
     | Open interest attached | {"Yes" if sd_vols.open_interest is not None else "No"} |
     """

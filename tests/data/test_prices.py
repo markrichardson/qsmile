@@ -474,8 +474,8 @@ class TestToSmileDataBlended:
         data = _make_prices(vol=0.25, spread=0.005)
         chain = OptionChain(strikedata=data["strikedata"], metadata=data["metadata"])
         sd = chain.to_vols()
-        assert sd.x_coord == XCoord.FixedStrike
-        assert sd.y_coord == YCoord.Volatility
+        assert sd.current_x_coord == XCoord.FixedStrike
+        assert sd.current_y_coord == YCoord.Volatility
 
     def test_blended_vols_close_to_known_vol(self):
         """With flat-vol Black76 prices, blended vols should recover the input vol."""
@@ -617,8 +617,8 @@ class TestOptionChainToSmileData:
             ),
         )
         sd = prices.to_vols()
-        assert sd.x_coord == XCoord.FixedStrike
-        assert sd.y_coord == YCoord.Volatility
+        assert sd.current_x_coord == XCoord.FixedStrike
+        assert sd.current_y_coord == YCoord.Volatility
         assert sd.metadata.forward == prices.metadata.forward
         assert sd.metadata.discount_factor == prices.metadata.discount_factor
         assert sd.metadata.expiry == prices.metadata.expiry
