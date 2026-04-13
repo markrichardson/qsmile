@@ -117,5 +117,5 @@ files:
 - docs/TESTS.md
 - pytest.ini
 - ruff.toml
-synced_at: '2026-04-12T22:39:26Z'
+synced_at: '2026-04-13T00:26:11Z'
 strategy: merge
