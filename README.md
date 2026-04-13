@@ -2,7 +2,7 @@
 
 # qsmile
 
-### Quantitative Smile Modelling
+### Volatility Smile Modelling
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Python versions](https://img.shields.io/badge/Python-3.11%20•%203.12%20•%203.13-blue?logo=python)](https://www.python.org/)
@@ -19,7 +19,7 @@
 [![MARIMO](https://github.com/markrichardson/qsmile/actions/workflows/rhiza_marimo.yml/badge.svg?event=push)](https://github.com/markrichardson/qsmile/actions/workflows/rhiza_marimo.yml)
 [![CodeFactor](https://www.codefactor.io/repository/github/markrichardson/qsmile/badge)](https://www.codefactor.io/repository/github/markrichardson/qsmile)
 
-**Volatility smile fitting for quantitative finance**
+**Volatility smile fitting for option trading**
 
 </div>
 
