@@ -17,6 +17,7 @@
 
 [![CI](https://github.com/markrichardson/qsmile/actions/workflows/rhiza_ci.yml/badge.svg?event=push)](https://github.com/markrichardson/qsmile/actions/workflows/rhiza_ci.yml)
 [![MARIMO](https://github.com/markrichardson/qsmile/actions/workflows/rhiza_marimo.yml/badge.svg?event=push)](https://github.com/markrichardson/qsmile/actions/workflows/rhiza_marimo.yml)
+[![CodeFactor](https://www.codefactor.io/repository/github/markrichardson/qsmile/badge)](https://www.codefactor.io/repository/github/markrichardson/qsmile)
 
 **Volatility smile fitting for quantitative finance**
 
