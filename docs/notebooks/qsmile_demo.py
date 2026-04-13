@@ -22,20 +22,14 @@ __generated_with = "0.21.1"
 app = marimo.App(width="medium")
 
 with app.setup:
-    from pathlib import Path
-
     import marimo as mo
     import numpy as np
-    import pandas as pd
     import plotly.graph_objects as go
     from plotly.subplots import make_subplots
 
     from qsmile import (
-        DayCount,
-        OptionChain,
         SABRModel,
-        SmileMetadata,
-        StrikeArray,
+        SampleDataReader,
         SVIModel,
         XCoord,
         YCoord,
@@ -96,77 +90,14 @@ def cell_chain_intro():
 @app.cell(hide_code=True)
 def cell_load_data():
     """Load real SPX option chain from parquet."""
-    _root = Path(__file__).resolve().parent.parent.parent.parent
-    _pq = sorted(_root.glob("parquet/chains/*.parquet"))[-1]
-    df_raw = pd.read_parquet(_pq)
-
-    # Extract dates from the parquet data
-    date = pd.Timestamp(df_raw["fetchDate"].iloc[0])
-    expiry_date = pd.Timestamp(df_raw["expiryDate"].iloc[0])
-
-    # Pivot calls/puts onto common strikes
-    _cols = ["strike", "bid", "ask", "volume", "openInterest"]
-    calls = df_raw[df_raw["optionType"] == "call"][_cols].set_index("strike")
-    puts = df_raw[df_raw["optionType"] == "put"][_cols].set_index("strike")
-    merged = calls.join(puts, lsuffix="_call", rsuffix="_put", how="inner").sort_index()
-
-    strikes = merged.index.values.astype(np.float64)
-    call_bid = merged["bid_call"].values.astype(np.float64)
-    call_ask = merged["ask_call"].values.astype(np.float64)
-    put_bid = merged["bid_put"].values.astype(np.float64)
-    put_ask = merged["ask_put"].values.astype(np.float64)
-    volume = (merged["volume_call"].fillna(0).values + merged["volume_put"].fillna(0).values).astype(np.float64)
-    oi = (merged["openInterest_call"].fillna(0).values + merged["openInterest_put"].fillna(0).values).astype(np.float64)
-    return (
-        call_ask,
-        call_bid,
-        date,
-        expiry_date,
-        oi,
-        put_ask,
-        put_bid,
-        strikes,
-        volume,
-    )
+    reader = SampleDataReader()
+    chain_raw = reader.get_chain("SPX", "2026-04-03", "2026-06-30")
+    return (chain_raw,)
 
 
 @app.cell(hide_code=True)
-def cell_build_and_filter(
-    call_ask,
-    call_bid,
-    date,
-    expiry_date,
-    oi,
-    put_ask,
-    put_bid,
-    strikes,
-    volume,
-):
-    """Build raw OptionChain, filter, then show before/after comparison."""
-    # -- Construct SmileMetadata explicitly --
-    metadata = SmileMetadata(
-        date=date,
-        expiry=expiry_date,
-        daycount=DayCount.ACT365,
-        # forward and discount_factor will be auto-calibrated
-    )
-
-    # -- Build the raw (unfiltered) chain --
-    _idx = pd.Index(strikes, dtype=np.float64)
-    _sa = StrikeArray()
-    _sa.set(("call", "bid"), pd.Series(call_bid, index=_idx))
-    _sa.set(("call", "ask"), pd.Series(call_ask, index=_idx))
-    _sa.set(("put", "bid"), pd.Series(put_bid, index=_idx))
-    _sa.set(("put", "ask"), pd.Series(put_ask, index=_idx))
-    _sa.set(("meta", "volume"), pd.Series(volume, index=_idx))
-    _sa.set(("meta", "open_interest"), pd.Series(oi, index=_idx))
-
-    chain_raw = OptionChain(
-        strikedata=_sa,
-        metadata=metadata,
-    )
-
-    # -- Filter immediately --
+def cell_build_and_filter(chain_raw):
+    """Filter the raw chain, then show before/after comparison."""
     chain = chain_raw.filter()
 
     _n_raw = len(chain_raw.strikes)
