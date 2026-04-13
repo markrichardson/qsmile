@@ -13,7 +13,7 @@
 # ]
 #
 # [tool.uv.sources.qsmile]
-# path = "../../.."
+# path = "../.."
 # editable = true
 # ///
 

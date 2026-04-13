@@ -2,10 +2,9 @@
 
 # qsmile
 
-### Quantitative Smile Modelling
-
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Python versions](https://img.shields.io/badge/Python-3.11%20•%203.12%20•%203.13-blue?logo=python)](https://www.python.org/)
+[![PyPI - Version](https://img.shields.io/pypi/v/qsmile.svg)](https://pypi.org/project/qsmile/)
 
 ![Github](https://img.shields.io/badge/GitHub-181717?style=flat&logo=github)
 ![Linux](https://img.shields.io/badge/Linux-FCC624?style=flat&logo=linux&logoColor=white)
@@ -15,11 +14,10 @@
 [![Hatch project](https://img.shields.io/badge/%F0%9F%A5%9A-Hatch-4051b5.svg)](https://github.com/pypa/hatch)
 
 [![CI](https://github.com/markrichardson/qsmile/actions/workflows/rhiza_ci.yml/badge.svg?event=push)](https://github.com/markrichardson/qsmile/actions/workflows/rhiza_ci.yml)
-[![PRE-COMMIT](https://github.com/markrichardson/qsmile/actions/workflows/rhiza_pre-commit.yml/badge.svg?event=push)](https://github.com/markrichardson/qsmile/actions/workflows/rhiza_pre-commit.yml)
-[![DEPTRY](https://github.com/markrichardson/qsmile/actions/workflows/rhiza_deptry.yml/badge.svg?event=push)](https://github.com/markrichardson/qsmile/actions/workflows/rhiza_deptry.yml)
 [![MARIMO](https://github.com/markrichardson/qsmile/actions/workflows/rhiza_marimo.yml/badge.svg?event=push)](https://github.com/markrichardson/qsmile/actions/workflows/rhiza_marimo.yml)
+[![CodeFactor](https://www.codefactor.io/repository/github/markrichardson/qsmile/badge)](https://www.codefactor.io/repository/github/markrichardson/qsmile)
 
-**Volatility smile fitting for quantitative finance**
+**Volatility smile modelling for option trading**
 
 </div>
 
@@ -32,8 +30,8 @@
 ### Key capabilities
 
 - **Bid/ask option prices** — `OptionChain` stores bid/ask call and put prices, and automatically calibrates the forward and discount factor from put-call parity using quasi-delta weighted least squares.
-- **Coordinate transforms** — `SmileData` is a unified container with `.transform(x, y)` to freely convert between any combination of X-coordinates (Strike, Moneyness, Log-Moneyness, Standardised) and Y-coordinates (Price, Volatility, Variance, Total Variance) via composable, invertible maps.
-- **SVI fitting** — Fit the SVI raw parameterisation to `SmileData`:
+- **Coordinate transforms** — `VolData` is a unified container with `.transform(x, y)` to freely convert between any combination of X-coordinates (Strike, Moneyness, Log-Moneyness, Standardised) and Y-coordinates (Price, Volatility, Variance, Total Variance) via composable, invertible maps.
+- **SVI fitting** — Fit the SVI raw parameterisation to `VolData`:
 
 $$w(k) = a + b\left(\rho(k - m) + \sqrt{(k - m)^2 + \sigma^2}\right)$$
 
@@ -68,7 +66,7 @@ make install
 ```python +RHIZA_SKIP
 import numpy as np
 import pandas as pd
-from qsmile import OptionChain, SmileData, SmileMetadata, StrikeArray, SVIModel, XCoord, YCoord, fit
+from qsmile import OptionChain, SmileMetadata, StrikeArray, SVIModel, VolData, XCoord, YCoord, fit
 
 # Bid/ask prices — forward and DF are calibrated automatically
 strikes = np.array([80, 90, 95, 100, 105, 110, 120], dtype=float)
@@ -87,12 +85,12 @@ print(prices.metadata.forward)          # Calibrated forward
 print(prices.metadata.discount_factor)  # Calibrated discount factor
 
 # Enter the coordinate transform framework
-sd = prices.to_smile_data()                               # (FixedStrike, Volatility)
+sd = prices.to_vols()                                      # (FixedStrike, Volatility)
 sd_unit = sd.transform(XCoord.StandardisedStrike, YCoord.TotalVariance)  # → unitised
 
-# Fit SVI directly from SmileData
+# Fit SVI directly from VolData
 result = fit(sd, model=SVIModel)
-print(result.params)   # Fitted SVIModel
+print(result.model)    # Fitted SVIModel
 print(result.rmse)     # Root mean square error
 ```
 
@@ -101,7 +99,7 @@ print(result.rmse)     # Root mean square error
 ```python +RHIZA_SKIP
 import numpy as np
 import pandas as pd
-from qsmile import SmileData, SmileMetadata, SVIModel, fit
+from qsmile import SmileMetadata, SVIModel, VolData, fit
 
 meta = SmileMetadata(
     date=pd.Timestamp("2024-01-01"),
@@ -109,14 +107,14 @@ meta = SmileMetadata(
     forward=100.0,
 )
 
-sd = SmileData.from_mid_vols(
+sd = VolData.from_mid_vols(
     strikes=np.array([80, 90, 100, 110, 120], dtype=float),
     ivs=np.array([0.28, 0.22, 0.18, 0.17, 0.19]),
     metadata=meta,
 )
 
 result = fit(sd, model=SVIModel)
-print(result.params)   # Fitted SVIModel
+print(result.model)    # Fitted SVIModel
 print(result.rmse)     # Root mean square error
 ```
 
@@ -129,13 +127,13 @@ print(result.rmse)     # Root mean square error
 | Class | Description |
 |---|---|
 | `OptionChain` | Bid/ask call and put prices with automatic forward/DF calibration |
-| `SmileData` | Unified coordinate-labelled container with `.transform(x, y)` and `.from_mid_vols()` factory |
+| `VolData` | Unified coordinate-labelled container with `.transform(x, y)` and `.from_mid_vols()` factory |
 
 ### Coordinate transforms
 
 ```
-OptionChain ─── .to_smile_data() ──→ SmileData ─── .transform(x, y) ──→ SmileData
-SmileData.from_mid_vols(...)            ──→ SmileData ───────────────────────────┘
+OptionChain ─── .to_vols() ──→ VolData ─── .transform(x, y) ──→ VolData
+VolData.from_mid_vols(...)         ──→ VolData ───────────────────────────┘
 ```
 
 | Coordinate type | Values |
@@ -147,10 +145,9 @@ SmileData.from_mid_vols(...)            ──→ SmileData ──────�
 
 | Function / Class | Description |
 |---|---|
-| `fit(chain, model)` | Fit any `SmileModel` to `SmileData` — generic entry point |
-| `SmileModel` | Protocol for pluggable smile models (native coords, bounds, evaluate, etc.) |
-| `AbstractSmileModel` | Abstract base dataclass with default `to_array()`/`from_array()` derived from `param_names` |
-| `SmileResult` | Fitted result with `.params`, `.residuals`, `.rmse`, `.success`, `.evaluate(x)` |
+| `fit(chain, model)` | Fit any `SmileModel` to `VolData` — generic entry point |
+| `SmileModel` | Abstract base dataclass for pluggable smile models (native coords, bounds, evaluate, etc.) |
+| `SmileResult` | Fitted result with `.model`, `.residuals`, `.rmse`, `.success` |
 | `SVIModel` | SVI model and parameter values `(a, b, rho, m, sigma)` with `.evaluate(k)` and `.implied_vol(k, T)` |
 | `SABRModel` | SABR model `(alpha, beta, rho, nu)` with Hagan (2002) lognormal implied vol `.evaluate(k)` |
 
