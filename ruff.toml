@@ -119,7 +119,7 @@ line-ending = "auto"
     "RUF012",   # Allow mutable class attributes in project tests
 ]
 # Marimo notebooks - allow flexible coding patterns for interactive exploration
-"**/marimo/**/*.py" = [
+"**/notebooks/*.py" = [
     "D100",    # No module docstring - marimo requires `import marimo` as the first statement
     "N803",    # Allow non-lowercase variable names in notebooks
     "N806",    # Allow uppercase variable names in notebooks
