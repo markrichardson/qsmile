@@ -17,7 +17,7 @@
 [![MARIMO](https://github.com/markrichardson/qsmile/actions/workflows/rhiza_marimo.yml/badge.svg?event=push)](https://github.com/markrichardson/qsmile/actions/workflows/rhiza_marimo.yml)
 [![CodeFactor](https://www.codefactor.io/repository/github/markrichardson/qsmile/badge)](https://www.codefactor.io/repository/github/markrichardson/qsmile)
 
-*Volatility smile modelling for option trading**
+**Volatility smile modelling for option trading**
 
 </div>
 
