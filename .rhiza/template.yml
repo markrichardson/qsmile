@@ -10,4 +10,3 @@ templates:
 
 exclude:
   - .github/workflows/rhiza_link_check.yml  # put this back when the workflow is fixed
-  - book/marimo/notebooks/rhiza.py
