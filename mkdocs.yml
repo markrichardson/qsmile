@@ -1,3 +1,5 @@
+INHERIT: docs/mkdocs-base.yml
+
 site_name: qsmile
 site_description: Volatility Smile Modelling
 site_url: https://markrichardson.github.io/qsmile/
@@ -5,7 +7,6 @@ repo_url: https://github.com/markrichardson/qsmile
 repo_name: markrichardson/qsmile
 
 docs_dir: docs
-site_dir: _mkdocs
 
 theme:
   name: material
