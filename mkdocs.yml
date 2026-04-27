@@ -54,9 +54,18 @@ extra_javascript:
 
 nav:
   - Home: index.md
-  - Marimo Notebooks: notebooks.md
-  - Reports: reports.md
   - API Reference: api.md
+  - Notebooks:
+      - Overview: notebooks.md
+      - qsmile Demo: notebooks/qsmile_demo.html
+      - Fitting Demo: notebooks/fitting_demo.html
+  - Reports:
+      - Overview: reports.md
+      - Test Report: reports/html-report/report.html
+      - Coverage Report: reports/html-coverage/index.html
   - Developer:
       - Contributing: CONTRIBUTING.md
       - Code of Conduct: CODE_OF_CONDUCT.md
+      - Devcontainer: development/DEVCONTAINER.md
+      - Marimo: development/MARIMO.md
+      - Tests: development/TESTS.md
