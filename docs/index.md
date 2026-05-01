@@ -21,7 +21,7 @@ $$w(k) = a + b\left(\rho(k - m) + \sqrt{(k - m)^2 + \sigma^2}\right)$$
 where $k = \ln(K/F)$ is log-moneyness and $w$ is total implied variance.
 
 - **SABR model** — Fit the SABR stochastic volatility model.
-- **Black76 pricing** — Vectorised call/put pricing and implied vol inversion via `black76_call`, `black76_put`, and `black76_implied_vol`.
+- **Black76 pricing** — Vectorised call/put pricing and explicit closed-form implied vol inversion via `black76_call`, `black76_put`, and `black76_implied_vol`. The inverter uses the inverse-Gaussian quantile representation of [Schadner (2026)](https://arxiv.org/abs/2604.24480), which recovers implied vol to machine precision in a single non-iterative evaluation.
 - **Plotting** — All chain types have a `.plot()` method for bid/ask error-bar charts (requires `qsmile[plot]`).
 
 ## Quick Example
