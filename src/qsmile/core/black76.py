@@ -4,8 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
-from scipy.optimize import brentq
-from scipy.stats import norm
+from scipy.stats import invgauss, norm
 
 
 def _validate_common(
@@ -141,6 +140,20 @@ def black76_implied_vol(
 ) -> float:
     """Invert Black76 to recover implied volatility.
 
+    Uses the explicit closed-form solution of Schadner (2026), "An Explicit
+    Solution to Black-Scholes Implied Volatility" (arXiv:2604.24480), which
+    expresses implied volatility as a direct transform of the option price
+    via the inverse Gaussian quantile function -- no root finding required.
+
+    For a call with normalized price ``c = C / (D F)`` and forward
+    log-moneyness ``k = log(K/F)``::
+
+        sigma = 2 / sqrt(T * F_IG^{-1}((1-c)/m; 2/|k|, 1))
+
+    where ``m = 1`` if ``K > F`` and ``m = K/F`` if ``K < F``. At ``k = 0``
+    the formula collapses to ``sigma = (2/sqrt(T)) * Phi^{-1}((c+1)/2)``.
+    The put case follows from put-call parity.
+
     Parameters
     ----------
     price : float
@@ -156,10 +169,13 @@ def black76_implied_vol(
     is_call : bool
         True for call, False for put.
     tol : float
-        Root-finding tolerance.
+        Tolerance for arbitrage-bound checks and the intrinsic-value
+        short-circuit (returns ``0.0``).
     max_vol : float
-        Upper bound for vol search.
+        Retained for backward compatibility. The closed-form solution does
+        not perform a search, so this argument is unused.
     """
+    del max_vol  # unused; closed-form solution does not search
     _validate_common(forward, strike, discount_factor, expiry)
 
     # No-arbitrage bounds
@@ -177,13 +193,50 @@ def black76_implied_vol(
         msg = f"price {price} exceeds upper bound {upper_bound}"
         raise ValueError(msg)
 
-    # Edge case: price equals intrinsic → vol is 0
+    # Edge case: price equals intrinsic -> vol is 0
     if price <= intrinsic + tol:
         return 0.0
 
-    pricer = black76_call if is_call else black76_put
+    # Normalized price c = C / (D * F); k = log(K / F)
+    df_f = discount_factor * forward
+    k = float(np.log(strike / forward))
 
-    def objective(sigma: float) -> float:
-        return float(pricer(forward, strike, discount_factor, sigma, expiry)) - price
+    # ATM case: explicit Gaussian-quantile form (Schadner Eq. 2)
+    if abs(k) < 1e-15:
+        c = price / df_f
+        v = 2.0 * float(norm.ppf((c + 1.0) / 2.0))
+        return v / float(np.sqrt(expiry))
 
-    return brentq(objective, 0.0, max_vol, xtol=tol)
+    # Compute the IG quantile argument q in a numerically stable form that
+    # avoids catastrophic cancellation when the option is deep ITM (i.e. when
+    # the normalized price c is close to 1). Schadner's m factor folds the
+    # ITM case into the OTM one via parity; combined with the price/(D*F)
+    # normalization this yields:
+    #   call:  q = (D*F - price) / (D * min(F, K))
+    #   put :  q = (D*K - price) / (D * min(F, K))
+    # We additionally compute the complementary probability qc = 1 - q in a
+    # form that does not cancel, so we can use the survival-function inverse
+    # ``invgauss.isf`` whenever q > 0.5. Computing the smaller of (q, qc)
+    # accurately preserves machine precision in deep ITM/OTM regimes where
+    # the quantile lies far in the tail of the inverse Gaussian.
+    df = discount_factor
+    denom = df * min(forward, strike)
+    if is_call:
+        numer = df * forward - price
+        # qc = 1 - q; time value above intrinsic, normalized by D*K when ITM
+        qc = price / (df * forward) if strike >= forward else (price - df * (forward - strike)) / (df * strike)
+    else:
+        numer = df * strike - price
+        qc = (price - df * (strike - forward)) / (df * forward) if strike >= forward else price / (df * strike)
+    q = numer / denom
+
+    # Numerical guard: q must lie in (0, 1).
+    q = min(max(q, 1e-300), 1.0)
+    qc = min(max(qc, 1e-300), 1.0)
+
+    # scipy.stats.invgauss is parameterised by mu with shape lambda = 1,
+    # matching Schadner's F_IG(.; 2/|k|, 1). Use isf when q > 0.5 because the
+    # survival-function inversion is better-conditioned in the right tail.
+    mu = 2.0 / abs(k)
+    x = float(invgauss.isf(qc, mu)) if q > 0.5 else float(invgauss.ppf(q, mu))
+    return 2.0 / float(np.sqrt(expiry * x))
