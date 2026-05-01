@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
-from scipy.optimize import brentq
 from scipy.stats import norm
 
 
@@ -128,6 +129,36 @@ def black76_put(
     return np.where(zero_vol, intrinsic, price)
 
 
+def _initial_vol_guess(
+    call_undisc: float,
+    forward: float,
+    strike: float,
+    expiry: float,
+) -> float:
+    """Closed-form initial guess for the implied volatility of an undiscounted call.
+
+    Uses the Corrado-Miller (1996) rational approximation, which is exact at
+    the money and accurate for moderate moneyness, falling back to the
+    Brenner-Subrahmanyam (1988) ATM formula when the CM discriminant is
+    negative (e.g. far-from-the-money quotes).
+    """
+    sqrt_t = math.sqrt(expiry)
+    half_diff = 0.5 * (forward - strike)
+    # Corrado-Miller discriminant
+    disc = (call_undisc - half_diff) ** 2 - (forward - strike) ** 2 / math.pi
+    if disc >= 0.0 and (forward + strike) > 0.0:
+        sigma = (math.sqrt(2.0 * math.pi) / (forward + strike)) * (
+            (call_undisc - half_diff) + math.sqrt(disc)
+        )
+        if sigma > 0.0 and math.isfinite(sigma):
+            return sigma / sqrt_t
+    # Brenner-Subrahmanyam ATM fallback: σ ≈ √(2π/T) · C/F
+    sigma = math.sqrt(2.0 * math.pi) * call_undisc / max(forward, 1e-300)
+    if sigma > 0.0 and math.isfinite(sigma):
+        return sigma / sqrt_t
+    return 0.2  # last-ditch default
+
+
 def black76_implied_vol(
     price: float,
     forward: float,
@@ -140,6 +171,12 @@ def black76_implied_vol(
     max_vol: float = 10.0,
 ) -> float:
     """Invert Black76 to recover implied volatility.
+
+    Uses a semi-closed-form algorithm: a closed-form analytical initial
+    guess (Corrado-Miller, with a Brenner-Subrahmanyam fallback) is refined
+    by safeguarded Newton-Raphson iterations against the analytical Black76
+    vega. Convergence is quadratic and typically reaches machine precision
+    in a handful of iterations, with no bracket-based root-finder required.
 
     Parameters
     ----------
@@ -156,9 +193,9 @@ def black76_implied_vol(
     is_call : bool
         True for call, False for put.
     tol : float
-        Root-finding tolerance.
+        Convergence tolerance on the price residual (in undiscounted units).
     max_vol : float
-        Upper bound for vol search.
+        Upper bound for the implied volatility search.
     """
     _validate_common(forward, strike, discount_factor, expiry)
 
@@ -181,9 +218,53 @@ def black76_implied_vol(
     if price <= intrinsic + tol:
         return 0.0
 
-    pricer = black76_call if is_call else black76_put
+    # Reduce put to call via put-call parity: C - P = D * (F - K).
+    # The Black76 vega is identical for calls and puts, so a single Newton
+    # loop on the call branch handles both option types.
+    f, k, t = float(forward), float(strike), float(expiry)
+    df = float(discount_factor)
+    if is_call:
+        call_undisc = price / df
+    else:
+        call_undisc = price / df + (f - k)
 
-    def objective(sigma: float) -> float:
-        return float(pricer(forward, strike, discount_factor, sigma, expiry)) - price
+    sqrt_t = math.sqrt(t)
+    log_fk = math.log(f / k)
 
-    return brentq(objective, 0.0, max_vol, xtol=tol)
+    # Tolerance on the *undiscounted* call price (Newton's price residual).
+    price_tol = max(tol, 1e-15) * max(f, k, 1.0)
+
+    sigma = _initial_vol_guess(call_undisc, f, k, t)
+    # Clamp the seed into a reasonable open interval.
+    sigma = min(max(sigma, 1e-8), max_vol)
+
+    max_iter = 64
+    for _ in range(max_iter):
+        v_sqrt_t = sigma * sqrt_t
+        d1 = (log_fk + 0.5 * v_sqrt_t * v_sqrt_t) / v_sqrt_t
+        d2 = d1 - v_sqrt_t
+        model = f * norm.cdf(d1) - k * norm.cdf(d2)
+        diff = model - call_undisc
+        if abs(diff) <= price_tol:
+            return sigma
+        # Black76 vega (undiscounted): F * sqrt(T) * φ(d1)
+        vega = f * sqrt_t * norm.pdf(d1)
+        if vega < 1e-300:
+            # Vega has vanished; bisect-style nudge toward the bound.
+            sigma = 0.5 * (sigma + (max_vol if diff < 0 else 0.0))
+            continue
+        step = diff / vega
+        next_sigma = sigma - step
+        # Safeguard: keep iterates strictly inside (0, max_vol]. If Newton
+        # overshoots, halve the step until it lies in-bounds.
+        while next_sigma <= 0.0 or next_sigma > max_vol:
+            step *= 0.5
+            next_sigma = sigma - step
+            if abs(step) < 1e-300:
+                break
+        if abs(next_sigma - sigma) <= tol:
+            return next_sigma
+        sigma = next_sigma
+
+    # Fell through without meeting the strict tolerance; return best estimate.
+    return sigma

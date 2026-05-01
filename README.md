@@ -157,7 +157,7 @@ VolData.from_mid_vols(...)         ──→ VolData ─────────
 |---|---|
 | `black76_call(F, K, D, σ, T)` | Vectorised Black76 call price |
 | `black76_put(F, K, D, σ, T)` | Vectorised Black76 put price |
-| `black76_implied_vol(price, F, K, D, T)` | Implied vol inversion via Brent's method |
+| `black76_implied_vol(price, F, K, D, T)` | Implied vol inversion via a semi-closed-form algorithm (analytical initial guess + Newton refinement) |
 
 ---
 
