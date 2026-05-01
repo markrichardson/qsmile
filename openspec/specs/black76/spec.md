@@ -62,7 +62,7 @@ The system SHALL validate inputs to all Black76 functions.
 - **THEN** the function SHALL raise a `ValueError`
 
 ### Requirement: Black76 implied vol inversion
-The system SHALL provide a function `black76_implied_vol(price, forward, strike, discount_factor, expiry, is_call)` that returns the implied volatility by numerically inverting the Black76 formula.
+The system SHALL provide a function `black76_implied_vol(price, forward, strike, discount_factor, expiry, is_call)` that returns the implied volatility by inverting the Black76 formula. The implementation SHALL use the explicit closed-form solution of Schadner (2026), "An Explicit Solution to Black-Scholes Implied Volatility" (arXiv:2604.24480), which expresses implied volatility as a direct transform via the inverse Gaussian quantile function and requires no iterative root finding.
 
 #### Scenario: Round-trip call price to vol
 - **WHEN** a call price is computed from known vol via `black76_call`, then `black76_implied_vol` is called with that price and `is_call=True`
