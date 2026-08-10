@@ -1,9 +1,12 @@
 repository: "jebel-quant/rhiza"
-ref: "v0.10.4"
+ref: "v1.3.2"
+
+profiles:
+  - github-project
+
+bundles: []
 
 templates:
   - devcontainer
-  - github
+  - github-devcontainer
   - marimo
-  - tests
-  - book
