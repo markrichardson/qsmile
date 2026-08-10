@@ -8,7 +8,7 @@ if TYPE_CHECKING:
     import matplotlib.figure
 
 
-def _require_matplotlib():
+def _require_matplotlib() -> None:
     """Import matplotlib or raise a helpful error."""
     try:
         import matplotlib as mpl  # noqa: F401

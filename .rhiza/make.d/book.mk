@@ -34,7 +34,7 @@ _book-notebooks:
 	    name=$$(basename "$$nb" .py); \
 	    printf "${BLUE}[INFO] Exporting $$nb -> ${ROOT}/docs/notebooks/$$name.html${RESET}\n"; \
 	    abs_output="${ROOT}/docs/notebooks/$$name.html"; \
-	    (cd "$$(dirname "$$nb")" && ${UV_BIN} run marimo export html --sandbox "$$(basename "$$nb")" -o "$$abs_output"); \
+	    (cd "$$(dirname "$$nb")" && ${UV_BIN} run --with marimo marimo export html --sandbox "$$(basename "$$nb")" -o "$$abs_output"); \
 	  done; \
 	else \
 	  printf "${YELLOW}[WARN] MARIMO_FOLDER not set or missing, skipping notebook export${RESET}\n"; \
@@ -45,7 +45,7 @@ _book-notebooks:
 # refuses to serve gitignored directories like _book) is not needed.
 serve: book ## build and serve the book at http://localhost:8000
 	@printf "${BLUE}[INFO] Serving book at http://localhost:8000 (Ctrl-C to stop)${RESET}\n"
-	@cd $(BOOK_OUTPUT) && python3 -m http.server 8000
+	@cd $(BOOK_OUTPUT) && ${UV_BIN} run python -m http.server 8000
 
 book:: _book-reports _book-notebooks ## compile the companion book via MkDocs
 	@rm -rf "$(BOOK_OUTPUT)"
