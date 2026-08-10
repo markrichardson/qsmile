@@ -132,6 +132,9 @@ line-ending = "auto"
     "S607",  # partial executable paths (git, make) are intentional in test drivers
     "ARG",   # pytest fixtures are requested by name for their side effects, not always read
     "N806",  # Allow uppercase variable names (F, K, D, T — quant finance convention)
+    "D101",  # Allow missing docstrings on test classes
+    "D102",  # Allow missing docstrings on test methods
+    "D105",  # Allow missing docstrings on magic methods in tests
 ]
 # Project test suite only — allowances the synced .rhiza/tests should not inherit
 "tests/**/*.py" = [
@@ -155,4 +158,6 @@ line-ending = "auto"
 # Quantitative finance source — standard mathematical notation (F=forward, K=strike, D=discount, T=time)
 "src/qsmile/**/*.py" = [
     "N806",    # Allow uppercase variable names (quant finance convention)
+    "ARG001",  # Allow unused function arguments (consistent signatures for transform functions)
+    "ANN001",  # Allow missing type annotations for some function arguments (flexible plotting APIs)
 ]
