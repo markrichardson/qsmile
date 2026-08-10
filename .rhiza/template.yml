@@ -4,8 +4,6 @@ ref: "v1.3.2"
 profiles:
   - github-project
 
-bundles: []
-
 templates:
   - devcontainer
   - github-devcontainer
