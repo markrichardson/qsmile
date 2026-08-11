@@ -44,7 +44,7 @@ jobs:
 
       - name: Lint Dockerfile with hadolint
         if: ${{ steps.check_dockerfile.outputs.docker_present == 'true' }}
-        uses: hadolint/hadolint-action@v3.3.0
+        uses: hadolint/hadolint-action@v3.4.0
         with:
           dockerfile: docker/Dockerfile
           # Fail on any error-level findings (default behavior). Adjust if needed:
@@ -52,7 +52,7 @@ jobs:
 
       - name: Set up Docker Buildx
         if: ${{ steps.check_dockerfile.outputs.docker_present == 'true' }}
-        uses: docker/setup-buildx-action@v4.0.0
+        uses: docker/setup-buildx-action@v4.2.0
 
       - name: Read Python version from .python-version
         if: ${{ steps.check_dockerfile.outputs.docker_present == 'true' }}
