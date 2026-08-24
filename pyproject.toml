@@ -16,7 +16,6 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
-    "License :: OSI Approved :: MIT License",
     "Intended Audience :: Developers",
     "Topic :: Software Development :: Build Tools",
 ]
@@ -72,6 +71,16 @@ check_untyped_defs = false
 ignore_missing_imports = true
 allow_untyped_calls = true
 allow_untyped_defs = true
+
+[tool.bumpversion]
+current_version = "0.0.2"
+commit = false
+tag = false
+
+[[tool.bumpversion.files]]
+filename = "pyproject.toml"
+search = 'version = "{current_version}"'
+replace = 'version = "{new_version}"'
 
 [build-system]
 requires = ["hatchling"]
