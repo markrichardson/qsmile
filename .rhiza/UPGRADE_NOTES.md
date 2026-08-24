@@ -68,17 +68,28 @@ Keep current configuration. The templates work fine and are well-tested.
      - marimo
    ```
 
-### Option 3: Use Archived rhiza-cli (Not Recommended)
-The old CLI might still work for older rhiza versions, but:
-- It's archived/unmaintained
-- May break at any time
-- Last release: v0.18.0
+### Option 3: Use Archived rhiza-cli ⚠️ LIMITED
+**Status**: Still works! Tested with v0.18.0 against rhiza v1.3.2
+**Pros**: Automated syncing still works for older rhiza versions
+**Cons**: 
+- Archived/unmaintained (no future updates)
+- Only works with rhiza versions before v1.6.0 (pre-Claude Code requirement)
+- May break in the future
 
-If you want to try:
+#### Using rhiza-cli:
+
 ```bash
-uvx rhiza@0.18.0 sync --strategy diff  # Preview
-uvx rhiza@0.18.0 sync  # Actually sync
+# Preview what would change (dry-run)
+uvx rhiza@0.18.0 sync --strategy diff
+
+# Actually perform the sync (requires clean git tree)
+uvx rhiza@0.18.0 sync
+
+# Or sync to a specific branch
+uvx rhiza@0.18.0 sync --target-branch update-rhiza
 ```
+
+**Important**: This can help you sync to v1.3.2 (your current config) but cannot upgrade to v1.6.0 which requires Claude Code.
 
 ### Option 4: Pin to Last CLI-Compatible Version
 Stay on v1.3.2 or find the last rhiza version that worked with rhiza-cli.
@@ -90,13 +101,23 @@ Based on chebpy's config, the main change is:
 - **github-paper bundle**: New workflow for LaTeX paper compilation
 - Various bugfixes and improvements to workflows
 
-## Recommendation
+## Recommendation for qsmile
 
-**For qsmile**: Use **Option 1** (stay on current version) unless you specifically need:
-- The `github-paper` bundle for LaTeX compilation
-- Specific bugfixes from newer versions
+**VERDICT**: **Stay on v1.3.2** (Option 1)
 
-The cost/benefit of manual syncing doesn't justify the effort for a stable project.
+**Reasoning**:
+1. ✅ Your current setup works fine
+2. ✅ v1.3.2 → v1.6.0 changes are mostly about `github-paper` bundle (LaTeX compilation)
+3. ✅ You're not using the `github-paper` bundle
+4. ❌ Manual syncing is tedious and error-prone
+5. ❌ rhiza-cli is deprecated and can't upgrade you to v1.6.0 anyway
+6. ❌ You'd need Claude Code to use v1.6.0+ properly
+
+**Action items**:
+- ✅ Keep `.rhiza/template.yml` at `ref: "v1.3.2"`
+- ✅ Use `uvx rhiza@0.18.0 sync` if you need to re-sync the v1.3.2 templates
+- 🔮 Revisit if GitHub Copilot adds rhiza support (unlikely)
+- 🔮 Or when you actually need features from v1.6.0+
 
 ## Future Strategy
 
