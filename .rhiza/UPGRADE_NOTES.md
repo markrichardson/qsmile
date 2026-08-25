@@ -1,132 +1,65 @@
 # Rhiza Upgrade Notes
 
-## Current Situation
+## Current state
 
-- **Current Version**: v1.3.2 (template.yml) / v0.10.4 (actually synced)
-- **Latest Version**: v1.6.0
-- **Problem**: Latest rhiza requires Claude Code plugin, which we don't have (using GitHub Copilot)
-- **Status**: rhiza-cli is archived/retired (no longer maintained)
+- **Template**: `jebel-quant/rhiza`, pinned in `.rhiza/template.yml`
+- **Synced ref**: `v1.6.0`
+- **What is managed**: exactly the paths listed under `files:` in `.rhiza/template.lock`.
+  Nothing else in this repo is template-owned, and the sync will not touch it.
 
-## Options
+## How to update
 
-### Option 1: Stay on Current Version ✅ RECOMMENDED
-**Pros**: No work, everything works
-**Cons**: Missing new features from v1.4.0-v1.6.0
+Updates are **automated**. From this repo, in Claude Code with the `rhiza-claude`
+plugin installed:
 
-Keep current configuration. The templates work fine and are well-tested.
-
-### Option 2: Manual Sync to v1.6.0
-**Pros**: Get latest features
-**Cons**: Manual process, no automatic updates
-
-#### Steps for Manual Sync:
-
-1. **Clone latest rhiza template**:
-   ```bash
-   cd /tmp
-   git clone https://github.com/jebel-quant/rhiza.git
-   cd rhiza
-   git checkout v1.6.0
-   ```
-
-2. **Review what chebpy uses** (our reference):
-   - Profile: `github-project`  
-   - Templates: `devcontainer`, `github-paper`
-   - Excludes: `.github/CONFIG.md`
-
-3. **Manually copy updated files**:
-   Look at the bundles you need and copy specific files:
-   ```bash
-   # Example - copy workflow files
-   cp rhiza/bundles/github/.github/workflows/*.yml \
-      ~/git-repos/qsmile/.github/workflows/
-   
-   # Copy makefile components
-   cp -r rhiza/bundles/core/.rhiza/make.d/* \
-      ~/git-repos/qsmile/.rhiza/make.d/
-   ```
-
-4. **Review and commit**:
-   ```bash
-   cd ~/git-repos/qsmile
-   git diff  # Review changes
-   git add -p  # Stage selectively
-   git commit -m "chore: manual sync to rhiza v1.6.0"
-   ```
-
-5. **Update template.yml**:
-   ```yaml
-   repository: "jebel-quant/rhiza"
-   ref: "v1.6.0"
-   
-   profiles:
-     - github-project
-   
-   templates:
-     - devcontainer
-     - github-devcontainer
-     - marimo
-   ```
-
-### Option 3: Use Archived rhiza-cli ⚠️ LIMITED
-**Status**: Still works! Tested with v0.18.0 against rhiza v1.3.2
-**Pros**: Automated syncing still works for older rhiza versions
-**Cons**: 
-- Archived/unmaintained (no future updates)
-- Only works with rhiza versions before v1.6.0 (pre-Claude Code requirement)
-- May break in the future
-
-#### Using rhiza-cli:
-
-```bash
-# Preview what would change (dry-run)
-uvx rhiza@0.18.0 sync --strategy diff
-
-# Actually perform the sync (requires clean git tree)
-uvx rhiza@0.18.0 sync
-
-# Or sync to a specific branch
-uvx rhiza@0.18.0 sync --target-branch update-rhiza
+```
+/rhiza:update            # bump to the latest template release and open a PR
+/rhiza:update v1.7.0     # or bump to a specific tag
 ```
 
-**Important**: This can help you sync to v1.3.2 (your current config) but cannot upgrade to v1.6.0 which requires Claude Code.
+It branches off the default branch, bumps `ref:` in `.rhiza/template.yml`, applies the
+sync, resolves any conflicts by taking the upstream side (managed files are the
+template's to own), and opens a PR containing **only** template-owned files. It runs no
+gates and files no issues.
 
-### Option 4: Pin to Last CLI-Compatible Version
-Stay on v1.3.2 or find the last rhiza version that worked with rhiza-cli.
-This gives you a stable base without manual updates.
+Related commands:
 
-## Key Changes in v1.4.0 - v1.6.0
+- `/rhiza:status` — what is currently managed; `--check` reports upstream drift
+- `/rhiza:quality` — run the quality gates and produce a scorecard
 
-Based on chebpy's config, the main change is:
-- **github-paper bundle**: New workflow for LaTeX paper compilation
-- Various bugfixes and improvements to workflows
+There is no manual copy-files-from-a-clone procedure to follow, and no CLI to install
+beyond `uv`, which the plugin's scripts run through.
 
-## Recommendation for qsmile
+## Outstanding: the v1.4 make-layer migration
 
-**VERDICT**: **Stay on v1.3.2** (Option 1)
+`v1.4` retired the modular make layer. `Makefile` is now a thin compatibility shim that
+forwards every target to `uvx rhiza-task@<pin>`; it no longer includes `.rhiza/rhiza.mk`
+or `.rhiza/make.d/`, and both are gone from the repo. The documented interface is
+`uv run rhiza-task <task>` — `make <task>` only still works because of the shim.
 
-**Reasoning**:
-1. ✅ Your current setup works fine
-2. ✅ v1.3.2 → v1.6.0 changes are mostly about `github-paper` bundle (LaTeX compilation)
-3. ✅ You're not using the `github-paper` bundle
-4. ❌ Manual syncing is tedious and error-prone
-5. ❌ rhiza-cli is deprecated and can't upgrade you to v1.6.0 anyway
-6. ❌ You'd need Claude Code to use v1.6.0+ properly
+Two things this repo has not yet done:
 
-**Action items**:
-- ✅ Keep `.rhiza/template.yml` at `ref: "v1.3.2"`
-- ✅ Use `uvx rhiza@0.18.0 sync` if you need to re-sync the v1.3.2 templates
-- 🔮 Revisit if GitHub Copilot adds rhiza support (unlikely)
-- 🔮 Or when you actually need features from v1.6.0+
+1. **`[tool.rhiza-task]` in `pyproject.toml` does not exist.** Settings that used to live
+   in the `make.d` fragments belong there now. Repo-specific *tasks* go in a
+   `rhiza_task.tasks` entry point; repo-specific *make targets* go in `local.mk`, which
+   the template deliberately does not ignore. Nothing should be appended to `Makefile`
+   itself — it is synced, so the next update overwrites it.
+2. **Three repo-owned fragments are orphaned**: `.rhiza/make.d/docker.mk`,
+   `presentation.mk` and `tutorial.mk`. Nothing loads `.rhiza/make.d/` any more, so these
+   are dead until they are re-homed into `local.mk` or a `rhiza_task.tasks` entry point.
 
-## Future Strategy
+The `rhiza-14-migrate` skill covers both.
 
-When GitHub Copilot adds support for rhiza (unlikely) or if you switch to Claude Code:
-- You can use `/rhiza:update` for automatic syncing
-- Until then, manual syncs or staying put are your options
+## Also changed in v1.4–v1.6
+
+- The rhiza checks are no longer synced into `.rhiza/tests/`; they arrive installed as
+  `pytest-rhiza`, so import resolution is the package manager's job. `pytest.ini` dropped
+  its `pythonpath` accordingly.
+- `.github/workflows/rhiza_fuzzing.yml` and `rhiza_mutation.yml` were retired, along with
+  the discussion/issue/PR templates and the shell completions the template used to ship.
 
 ## References
 
-- Rhiza main repo: https://github.com/jebel-quant/rhiza
-- Archived CLI: https://github.com/jebel-quant/rhiza-cli (read-only)
-- Chebpy reference: https://github.com/chebpy/chebpy/blob/master/.rhiza/template.yml
+- Template: <https://github.com/jebel-quant/rhiza>
+- This repo's pin and profile selection: `.rhiza/template.yml`
+- The authoritative list of managed files: `.rhiza/template.lock`
