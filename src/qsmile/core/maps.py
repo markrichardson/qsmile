@@ -42,6 +42,7 @@ Y_LADDER: list[YCoord] = [
 
 
 def _fixed_to_moneyness(x: NDArray[np.float64], meta: SmileMetadata) -> NDArray[np.float64]:
+    """Convert FixedStrike to MoneynessStrike coordinates."""
     if meta.forward is None:
         msg = "forward is required for FixedStrike to MoneynessStrike transform"
         raise TypeError(msg)
@@ -49,6 +50,7 @@ def _fixed_to_moneyness(x: NDArray[np.float64], meta: SmileMetadata) -> NDArray[
 
 
 def _moneyness_to_fixed(x: NDArray[np.float64], meta: SmileMetadata) -> NDArray[np.float64]:
+    """Convert MoneynessStrike to FixedStrike coordinates."""
     if meta.forward is None:
         msg = "forward is required for MoneynessStrike to FixedStrike transform"
         raise TypeError(msg)
@@ -56,14 +58,17 @@ def _moneyness_to_fixed(x: NDArray[np.float64], meta: SmileMetadata) -> NDArray[
 
 
 def _moneyness_to_log_moneyness(x: NDArray[np.float64], meta: SmileMetadata) -> NDArray[np.float64]:
+    """Convert MoneynessStrike to LogMoneynessStrike coordinates."""
     return np.log(x)
 
 
 def _log_moneyness_to_moneyness(x: NDArray[np.float64], meta: SmileMetadata) -> NDArray[np.float64]:
+    """Convert LogMoneynessStrike to MoneynessStrike coordinates."""
     return np.exp(x)
 
 
 def _log_moneyness_to_standardised(x: NDArray[np.float64], meta: SmileMetadata) -> NDArray[np.float64]:
+    """Convert LogMoneynessStrike to StandardisedStrike coordinates."""
     if meta.sigma_atm is None:
         msg = "sigma_atm is required for StandardisedStrike transforms"
         raise ValueError(msg)
@@ -71,6 +76,7 @@ def _log_moneyness_to_standardised(x: NDArray[np.float64], meta: SmileMetadata) 
 
 
 def _standardised_to_log_moneyness(x: NDArray[np.float64], meta: SmileMetadata) -> NDArray[np.float64]:
+    """Convert StandardisedStrike to LogMoneynessStrike coordinates."""
     if meta.sigma_atm is None:
         msg = "sigma_atm is required for StandardisedStrike transforms"
         raise ValueError(msg)
@@ -81,22 +87,26 @@ def _standardised_to_log_moneyness(x: NDArray[np.float64], meta: SmileMetadata) 
 
 
 def _vol_to_variance(y: NDArray[np.float64], x: NDArray[np.float64], meta: SmileMetadata) -> NDArray[np.float64]:
+    """Convert implied volatility to variance."""
     return y**2
 
 
 def _variance_to_vol(y: NDArray[np.float64], x: NDArray[np.float64], meta: SmileMetadata) -> NDArray[np.float64]:
+    """Convert variance to implied volatility."""
     return np.sqrt(np.maximum(y, 0.0))
 
 
 def _variance_to_total_variance(
     y: NDArray[np.float64], x: NDArray[np.float64], meta: SmileMetadata
 ) -> NDArray[np.float64]:
+    """Convert variance to total variance."""
     return y * meta.texpiry
 
 
 def _total_variance_to_variance(
     y: NDArray[np.float64], x: NDArray[np.float64], meta: SmileMetadata
 ) -> NDArray[np.float64]:
+    """Convert total variance to variance."""
     return y / meta.texpiry
 
 

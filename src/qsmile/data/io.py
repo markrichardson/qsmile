@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import cast
 
 import numpy as np
 import pandas as pd
@@ -71,6 +72,27 @@ class SampleDataReader:
         fetch_date: str,
         expiry_date: str,
     ) -> Path:
+        """Resolve the parquet file path for given parameters.
+
+        Parameters
+        ----------
+        underlying : str
+            Ticker symbol.
+        fetch_date : str
+            Fetch date in YYYY-MM-DD format.
+        expiry_date : str
+            Expiry date in YYYY-MM-DD format.
+
+        Returns:
+        -------
+        Path
+            Full path to the parquet file.
+
+        Raises:
+        ------
+        FileNotFoundError
+            If the parquet file does not exist.
+        """
         fd = pd.Timestamp(fetch_date).strftime("%Y%m%d")
         ed = pd.Timestamp(expiry_date).strftime("%Y%m%d")
         filename = f"{underlying}_{fd}_{ed}.parquet"
@@ -82,8 +104,34 @@ class SampleDataReader:
 
     @staticmethod
     def _build_chain(df_raw: pd.DataFrame) -> OptionChain:
-        date = pd.Timestamp(df_raw["fetchDate"].iloc[0])
-        expiry_date = pd.Timestamp(df_raw["expiryDate"].iloc[0])
+        """Build an OptionChain from raw parquet DataFrame.
+
+        Parameters
+        ----------
+        df_raw : pd.DataFrame
+            Raw parquet data with fetchDate, expiryDate, optionType, and chain columns.
+
+        Returns:
+        -------
+        OptionChain
+            Constructed option chain with metadata.
+
+        Raises:
+        ------
+        ValueError
+            If date or expiry are NaT.
+        """
+        date_raw = pd.Timestamp(df_raw["fetchDate"].iloc[0])
+        expiry_raw = pd.Timestamp(df_raw["expiryDate"].iloc[0])
+
+        # Ensure valid timestamps (not NaT)
+        if pd.isna(date_raw) or pd.isna(expiry_raw):
+            msg = "Invalid date or expiry: cannot be NaT"
+            raise ValueError(msg)
+
+        # Type narrowing: after the check above, these are guaranteed to be Timestamp
+        date = cast(pd.Timestamp, date_raw)
+        expiry_date = cast(pd.Timestamp, expiry_raw)
 
         calls = df_raw[df_raw["optionType"] == "call"][_CHAINS_COLS].set_index("strike")
         puts = df_raw[df_raw["optionType"] == "put"][_CHAINS_COLS].set_index("strike")
