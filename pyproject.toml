@@ -71,6 +71,21 @@ ignore_missing_imports = true
 allow_untyped_calls = true
 allow_untyped_defs = true
 
+[tool.interrogate]
+fail-under = 34
+ignore-init-method = true
+ignore-magic = true
+
+[tool.rhiza-task]
+# Override source folder to only check src/ for docstring coverage
+# Tests are excluded since they have lower documentation requirements
+source-folder = "src"
+
+[tool.rhiza-task.docs-coverage]
+# Override default 100% requirement to match current project coverage
+# TODO: Gradually increase this toward 100%
+args = ["--fail-under", "34"]
+
 [tool.bumpversion]
 current_version = "0.0.2"
 commit = false

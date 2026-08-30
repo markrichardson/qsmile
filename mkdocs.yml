@@ -66,6 +66,4 @@ nav:
   - Developer:
       - Contributing: CONTRIBUTING.md
       - Code of Conduct: CODE_OF_CONDUCT.md
-      - Devcontainer: development/DEVCONTAINER.md
-      - Marimo: development/MARIMO.md
-      - Tests: development/TESTS.md
+      - Rhiza: development/rhiza.md
