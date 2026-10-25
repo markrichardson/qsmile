@@ -261,11 +261,14 @@ def test_isinstance_check(self):
 
 ### Parametrized Tests
 ```python
-@pytest.mark.parametrize("x_coord,y_coord", [
-    (XCoord.FixedStrike, YCoord.Volatility),
-    (XCoord.LogMoneynessStrike, YCoord.TotalVariance),
-    (XCoord.StandardisedStrike, YCoord.Variance),
-])
+@pytest.mark.parametrize(
+    "x_coord,y_coord",
+    [
+        (XCoord.FixedStrike, YCoord.Volatility),
+        (XCoord.LogMoneynessStrike, YCoord.TotalVariance),
+        (XCoord.StandardisedStrike, YCoord.Variance),
+    ],
+)
 def test_transform_preserves_length(self, x_coord, y_coord):
     """Test that transforms preserve array length."""
     result = sd.transform(x_coord, y_coord)

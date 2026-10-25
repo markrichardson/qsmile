@@ -81,17 +81,17 @@ prices = OptionChain(
     strikedata=sa,
     metadata=SmileMetadata(date=pd.Timestamp("2024-01-01"), expiry=pd.Timestamp("2024-07-01")),
 )
-print(prices.metadata.forward)          # Calibrated forward
+print(prices.metadata.forward)  # Calibrated forward
 print(prices.metadata.discount_factor)  # Calibrated discount factor
 
 # Enter the coordinate transform framework
-sd = prices.to_vols()                                      # (FixedStrike, Volatility)
+sd = prices.to_vols()  # (FixedStrike, Volatility)
 sd_unit = sd.transform(XCoord.StandardisedStrike, YCoord.TotalVariance)  # → unitised
 
 # Fit SVI directly from VolData
 result = fit(sd, model=SVIModel)
-print(result.model)    # Fitted SVIModel
-print(result.rmse)     # Root mean square error
+print(result.model)  # Fitted SVIModel
+print(result.rmse)  # Root mean square error
 ```
 
 ### From mid implied vols
@@ -114,8 +114,8 @@ sd = VolData.from_mid_vols(
 )
 
 result = fit(sd, model=SVIModel)
-print(result.model)    # Fitted SVIModel
-print(result.rmse)     # Root mean square error
+print(result.model)  # Fitted SVIModel
+print(result.rmse)  # Root mean square error
 ```
 
 ---
