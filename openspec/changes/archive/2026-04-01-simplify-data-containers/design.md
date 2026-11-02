@@ -29,8 +29,7 @@ The qsmile library currently has three domain-specific data containers (`OptionC
 
 ```python
 @classmethod
-def from_mid_vols(cls, strikes, ivs, forward, expiry, discount_factor=1.0) -> SmileData:
-    ...
+def from_mid_vols(cls, strikes, ivs, forward, expiry, discount_factor=1.0) -> SmileData: ...
 ```
 
 Replaces `OptionChainVols.from_mid_vols()`. Constructs a `SmileData(FixedStrike, Volatility)` with `sigma_atm` auto-derived in metadata. Sets `y_bid = y_ask = ivs` (zero spread).
