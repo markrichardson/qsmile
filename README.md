@@ -2,7 +2,7 @@
 
 # qsmile
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE.md)
 [![Python versions](https://img.shields.io/badge/Python-3.11%20•%203.12%20•%203.13-blue?logo=python)](https://www.python.org/)
 [![PyPI - Version](https://img.shields.io/pypi/v/qsmile.svg)](https://pypi.org/project/qsmile/)
 
@@ -174,5 +174,5 @@ make marimo    # Launch interactive notebooks
 
 ## License
 
-MIT — see [LICENSE](LICENSE) for details.
+MIT — see [LICENSE](LICENSE.md) for details.
 
