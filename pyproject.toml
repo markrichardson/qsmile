@@ -22,7 +22,7 @@ dependencies = [
     "numpy>=2.4.0,<3.0",     # Numerical arrays for market data and SVI evaluation
     "scipy>=1.14.0,<2.0",    # Optimisation (least_squares) for SVI fitting
     "cvxpy>=1.6.0,<2.0",     # Convex optimisation for forward/DF calibration
-    "pandas>=2.0,<3.1",      # pd.Timestamp for date handling in SmileMetadata
+    "pandas>=2.0,<3.2",      # pd.Timestamp for date handling in SmileMetadata
 ]
 
 [project.optional-dependencies]
@@ -40,7 +40,7 @@ dev = [
     "marimo>=0.18.0,<1.0", # Reactive notebook runtime for book/ examples (v0.18+ for streaming, <1.0 for API stability)
     "numpy>=2.4.0,<3.0", # Numerical computing for notebook data analysis (v2.4+ includes 2.0 improvements, <3.0 avoids breaking changes)
     "plotly>=6.5.0,<7.0", # Interactive visualization in notebooks (v6.5+ mature features, <7.0 for API stability)
-    "pandas>=3,<3.1", # Data manipulation for notebook examples (v3+ for modern APIs, <3.1 conservative after major release)
+    "pandas>=3,<3.2", # Data manipulation for notebook examples (v3+ for modern APIs, <3.1 conservative after major release)
     "pyyaml>=6.0.2,<7.0", # YAML parsing for validation scripts (v6.0.2+ has proper wheel support for Python 3.12+, <7.0 for API stability)
     # See docs/DEPENDENCIES.md for detailed version rationale
     "pyarrow>=23.0.1",
